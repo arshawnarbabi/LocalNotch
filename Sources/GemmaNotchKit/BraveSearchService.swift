@@ -3,9 +3,9 @@ import Foundation
 final class BraveSearchService: Sendable {
     static let shared = BraveSearchService()
 
-    private let apiKey = "BSA054oegmxW4eJxwg_npufMoFcOdc-"
-
     func search(_ query: String) async -> String? {
+        let apiKey = UserDefaults.standard.string(forKey: "braveSearchAPIKey") ?? ""
+        guard !apiKey.isEmpty else { return nil }
         guard let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
               let url = URL(string: "https://api.search.brave.com/res/v1/web/search?q=\(encoded)&count=5")
         else { return nil }

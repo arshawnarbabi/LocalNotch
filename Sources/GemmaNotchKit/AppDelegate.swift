@@ -42,9 +42,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             skipIntermediateHides: true
         )
 
-        // Hide the empty leading slot so only trailing shows
-        notch.disableCompactLeading = true
-
         self.notch = notch
         Task { await notch.compact() }
 
@@ -78,10 +75,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = statusItem?.button {
-            button.image = NSImage(systemSymbolName: "sparkles", accessibilityDescription: "Gemma")
+            button.image = NSImage(systemSymbolName: "sparkles", accessibilityDescription: "LocalNotch")
         }
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Quit Gemma", action: #selector(quitApp), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: "Quit LocalNotch", action: #selector(quitApp), keyEquivalent: "q"))
         statusItem?.menu = menu
     }
 
@@ -90,7 +87,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-// Cycles a dot from small to large while Gemma is responding.
+// Cycles a dot from small to large while the model is responding.
 // Uses Circle() in a fixed frame so vertical position never shifts.
 struct ReactiveTypingDots: View {
     @ObservedObject var state: ChatState

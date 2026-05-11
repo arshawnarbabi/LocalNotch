@@ -31,8 +31,8 @@ private struct OllamaChatChunk: Codable {
 
 final class OllamaAPI: Sendable {
     static let shared = OllamaAPI()
-    static let textModel   = "gemma4:e2b-nvfp4"        // fast text-only model
-    static let visionModel = "llama3.2-vision:11b"     // multimodal model (pull with: ollama pull llama3.2-vision:11b)
+    static var textModel: String   { UserDefaults.standard.string(forKey: "textModelName") ?? "" }
+    static var visionModel: String { UserDefaults.standard.string(forKey: "visionModelName") ?? "" }
 
     func chat(messages: [OllamaMessage], model: String) -> AsyncThrowingStream<String, Error> {
         AsyncThrowingStream { continuation in

@@ -35,7 +35,7 @@ class WeatherService: ObservableObject {
     func fetch() async {
         guard let url = URL(string: "https://wttr.in/?format=j1") else { return }
         var request = URLRequest(url: url)
-        request.setValue("GemmaNotchKit/1.0", forHTTPHeaderField: "User-Agent")
+        request.setValue("LocalNotch/1.0", forHTTPHeaderField: "User-Agent")
         do {
             let (raw, _) = try await URLSession.shared.data(for: request)
             let parsed = try JSONDecoder().decode(WttrResponse.self, from: raw)

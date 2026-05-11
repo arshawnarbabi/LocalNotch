@@ -187,25 +187,25 @@ struct ChatView: View {
         .padding(.top, 4)
     }
 
-    // Collapsed: [icon] "Ask Gemma"  — "Ask Gemma" is the matched source
+    // Collapsed: [icon] "Ask anything" — matched geometry source for morph animation
     private var pillLabel: some View {
         HStack(spacing: 5) {
             Image(systemName: "text.bubble")
                 .font(.system(size: 10, weight: .medium))
                 .foregroundColor(.white.opacity(0.65))
-            Text("Ask Gemma")
+            Text("Ask anything")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(.white.opacity(0.65))
                 .matchedGeometryEffect(id: "promptText", in: pillNS)
         }
     }
 
-    // Expanded: "Ask Gemma" placeholder morphed from pill, then text field, then send button
+    // Expanded: "Ask anything" placeholder morphed from pill, then text field, then send button
     private var pillTextField: some View {
         HStack(spacing: 0) {
             ZStack(alignment: .leading) {
                 if inputText.isEmpty {
-                    Text("Ask Gemma")
+                    Text("Ask anything")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(.white.opacity(0.35))
                         .matchedGeometryEffect(id: "promptText", in: pillNS)
@@ -682,12 +682,18 @@ struct ChatView: View {
 
 struct WelcomeView: View {
     @StateObject private var weather = WeatherService()
+    @ObservedObject private var settings = AppSettings.shared
     @State private var nameWidth: CGFloat = 0
+
+    private var greeting: String {
+        let name = settings.displayName.trimmingCharacters(in: .whitespaces)
+        return name.isEmpty ? "Hello." : "Hello, \(name)."
+    }
 
     var body: some View {
         ZStack {
             VStack(alignment: .leading, spacing: 22) {
-                Text("Hello, Arshawn.")
+                Text(greeting)
                     .font(.system(size: 28, weight: .medium))
                     .foregroundColor(.white)
                     .background(
@@ -764,7 +770,7 @@ struct AssistantRow: View {
 
     var body: some View {
         Markdown(content.isEmpty ? "\u{200B}" : content)
-            .markdownTheme(.gemma)
+            .markdownTheme(.localNotch)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 4)
             .padding(.top, 2)
@@ -858,7 +864,7 @@ struct HistoryTurnView: View {
 // MARK: - Dark Markdown Theme
 
 extension Theme {
-    static var gemma: Theme {
+    static var localNotch: Theme {
         Theme()
             .text { ForegroundColor(.white); FontSize(15) }
             .strong { FontWeight(.bold) }

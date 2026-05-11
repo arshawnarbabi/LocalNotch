@@ -2,7 +2,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "GemmaNotchKit",
+    name: "LocalNotch",
     platforms: [.macOS(.v14)],
     dependencies: [
         .package(url: "https://github.com/MrKai77/DynamicNotchKit", from: "1.0.0"),
@@ -10,7 +10,7 @@ let package = Package(
     ],
     targets: [
         .executableTarget(
-            name: "GemmaNotchKit",
+            name: "LocalNotch",
             dependencies: [
                 .product(name: "DynamicNotchKit", package: "DynamicNotchKit"),
                 .product(name: "MarkdownUI", package: "swift-markdown-ui"),

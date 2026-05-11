@@ -1,0 +1,61 @@
+{
+  "": {
+    "swift-dependencies": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/master.swiftdeps"
+  },
+  "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/Sources/GemmaNotchKit/AppDelegate.swift": {
+    "dependencies": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/AppDelegate.d",
+    "object": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/AppDelegate.swift.o",
+    "swiftmodule": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/AppDelegate~partial.swiftmodule",
+    "swift-dependencies": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/AppDelegate.swiftdeps",
+    "diagnostics": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/AppDelegate.dia"
+  },
+  "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/Sources/GemmaNotchKit/BraveSearchService.swift": {
+    "dependencies": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/BraveSearchService.d",
+    "object": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/BraveSearchService.swift.o",
+    "swiftmodule": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/BraveSearchService~partial.swiftmodule",
+    "swift-dependencies": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/BraveSearchService.swiftdeps",
+    "diagnostics": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/BraveSearchService.dia"
+  },
+  "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/Sources/GemmaNotchKit/ChatState.swift": {
+    "dependencies": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/ChatState.d",
+    "object": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/ChatState.swift.o",
+    "swiftmodule": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/ChatState~partial.swiftmodule",
+    "swift-dependencies": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/ChatState.swiftdeps",
+    "diagnostics": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/ChatState.dia"
+  },
+  "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/Sources/GemmaNotchKit/ChatView.swift": {
+    "dependencies": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/ChatView.d",
+    "object": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/ChatView.swift.o",
+    "swiftmodule": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/ChatView~partial.swiftmodule",
+    "swift-dependencies": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/ChatView.swiftdeps",
+    "diagnostics": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/ChatView.dia"
+  },
+  "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/Sources/GemmaNotchKit/HoverTrigger.swift": {
+    "dependencies": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/HoverTrigger.d",
+    "object": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/HoverTrigger.swift.o",
+    "swiftmodule": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/HoverTrigger~partial.swiftmodule",
+    "swift-dependencies": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/HoverTrigger.swiftdeps",
+    "diagnostics": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/HoverTrigger.dia"
+  },
+  "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/Sources/GemmaNotchKit/OllamaAPI.swift": {
+    "dependencies": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/OllamaAPI.d",
+    "object": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/OllamaAPI.swift.o",
+    "swiftmodule": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/OllamaAPI~partial.swiftmodule",
+    "swift-dependencies": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/OllamaAPI.swiftdeps",
+    "diagnostics": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/OllamaAPI.dia"
+  },
+  "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/Sources/GemmaNotchKit/WeatherService.swift": {
+    "dependencies": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/WeatherService.d",
+    "object": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/WeatherService.swift.o",
+    "swiftmodule": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/WeatherService~partial.swiftmodule",
+    "swift-dependencies": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/WeatherService.swiftdeps",
+    "diagnostics": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/WeatherService.dia"
+  },
+  "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/Sources/GemmaNotchKit/main.swift": {
+    "dependencies": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/main.d",
+    "object": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/main.swift.o",
+    "swiftmodule": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/main~partial.swiftmodule",
+    "swift-dependencies": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/main.swiftdeps",
+    "diagnostics": "/Users/arshawnarbabi/Downloads/Gemma App 4/GemmaNotchKit/.build/arm64-apple-macosx/debug/GemmaNotchKit.build/main.dia"
+  }
+}

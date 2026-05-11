@@ -389,6 +389,13 @@ struct ChatView: View {
         let model = imageBase64 != nil ? OllamaAPI.visionModel : OllamaAPI.textModel
         streamingTask?.cancel()
         streamingTask = Task {
+            guard !model.isEmpty else {
+                await MainActor.run {
+                    state.currentResponse = "No model configured. Open Settings (⌘,) to choose one."
+                }
+                return
+            }
+
             var messages: [OllamaMessage]
             let displayText = text
 
@@ -596,6 +603,8 @@ struct ChatView: View {
 
     /// Combined decision: returns a search query if any layer decides to search.
     private func decideSearchQuery(from text: String) async -> String? {
+        let hasKey = !AppSettings.shared.braveSearchAPIKey.trimmingCharacters(in: .whitespaces).isEmpty
+        guard hasKey else { return nil }
         if let q = extractExplicitSearchQuery(from: text) { return q }
         if let q = detectCurrentInfoQuery(from: text) { return q }
         return await classifySearchNeed(from: text)

@@ -78,8 +78,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             button.image = NSImage(systemSymbolName: "sparkles", accessibilityDescription: "LocalNotch")
         }
         let menu = NSMenu()
+        menu.addItem(NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ","))
+        menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit LocalNotch", action: #selector(quitApp), keyEquivalent: "q"))
         statusItem?.menu = menu
+    }
+
+    @objc private func openSettings() {
+        AppSettings.shared.showingSettings = true
+        guard !isCurrentlyExpanded else { return }
+        isCurrentlyExpanded = true
+        Task { await notch?.expand() }
     }
 
     @objc private func quitApp() {

@@ -5,6 +5,7 @@ import ScreenCaptureKit
 
 struct ChatView: View {
     @ObservedObject var state: ChatState
+    @ObservedObject private var settings = AppSettings.shared
     @State private var inputText = ""
     @State private var isInputExpanded = false
     @State private var isHoveringInput = false
@@ -44,7 +45,10 @@ struct ChatView: View {
 
     var body: some View {
         ZStack {
-            if showingHistory {
+            if settings.showingSettings {
+                SettingsView()
+                    .transition(.opacity.combined(with: .scale(scale: 0.97)))
+            } else if showingHistory {
                 HistoryView(history: state.chatHistory) { showingHistory = false }
                     .transition(.opacity.combined(with: .scale(scale: 0.97)))
             } else {
@@ -55,6 +59,7 @@ struct ChatView: View {
                 .transition(.opacity.combined(with: .scale(scale: 0.97)))
             }
         }
+        .animation(.spring(response: 0.38, dampingFraction: 0.82), value: settings.showingSettings)
         .animation(.spring(response: 0.38, dampingFraction: 0.82), value: showingHistory)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -959,7 +964,7 @@ extension Theme {
 
 // MARK: - AppKit Tap Handler
 
-private struct AppKitTapHandler: NSViewRepresentable {
+struct AppKitTapHandler: NSViewRepresentable {
     let action: () -> Void
     var longPressAction: (() -> Void)? = nil
     var onPressChanged: ((Bool) -> Void)? = nil
@@ -1024,7 +1029,7 @@ private struct AppKitTapHandler: NSViewRepresentable {
 
 // MARK: - Always-Active Hover Detector
 
-private struct AlwaysActiveHoverDetector: NSViewRepresentable {
+struct AlwaysActiveHoverDetector: NSViewRepresentable {
     let onHover: (Bool) -> Void
 
     func makeNSView(context: Context) -> HoverView { HoverView(onHover: onHover) }
@@ -1051,7 +1056,7 @@ private struct AlwaysActiveHoverDetector: NSViewRepresentable {
 
 // MARK: - Glass Modifiers
 
-private struct GlassPillModifier: ViewModifier {
+struct GlassPillModifier: ViewModifier {
     @ViewBuilder func body(content: Content) -> some View {
         if #available(macOS 26, *) { content.glassEffect(.regular, in: .capsule) }
         else {
@@ -1062,7 +1067,7 @@ private struct GlassPillModifier: ViewModifier {
     }
 }
 
-private struct GlassSphereModifier: ViewModifier {
+struct GlassSphereModifier: ViewModifier {
     @ViewBuilder func body(content: Content) -> some View {
         if #available(macOS 26, *) { content.glassEffect(.regular, in: .circle) }
         else {
@@ -1073,7 +1078,7 @@ private struct GlassSphereModifier: ViewModifier {
     }
 }
 
-private struct GlassCircleModifier: ViewModifier {
+struct GlassCircleModifier: ViewModifier {
     @ViewBuilder func body(content: Content) -> some View {
         if #available(macOS 26, *) { content.glassEffect(.regular, in: .circle) }
         else { content }

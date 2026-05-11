@@ -51,6 +51,7 @@ enough and answer with whatever information is available.
     @Published var onboardingComplete: Bool {
         didSet { UserDefaults.standard.set(onboardingComplete, forKey: "onboardingComplete") }
     }
+    @Published var showingSettings: Bool = false
 
     private init() {
         textModelName    = UserDefaults.standard.string(forKey: "textModelName") ?? ""

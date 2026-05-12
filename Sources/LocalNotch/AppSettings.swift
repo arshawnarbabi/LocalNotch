@@ -51,6 +51,9 @@ enough and answer with whatever information is available.
     @Published var onboardingComplete: Bool {
         didSet { UserDefaults.standard.set(onboardingComplete, forKey: "onboardingComplete") }
     }
+    @Published var onboardingStep: Int {
+        didSet { UserDefaults.standard.set(onboardingStep, forKey: "onboardingStep") }
+    }
 
     private init() {
         textModelName    = UserDefaults.standard.string(forKey: "textModelName") ?? ""
@@ -59,5 +62,7 @@ enough and answer with whatever information is available.
         displayName      = UserDefaults.standard.string(forKey: "displayName") ?? ""
         systemPrompt     = UserDefaults.standard.string(forKey: "systemPrompt") ?? AppSettings.defaultSystemPrompt
         onboardingComplete = UserDefaults.standard.bool(forKey: "onboardingComplete")
+        let saved = UserDefaults.standard.integer(forKey: "onboardingStep")
+        onboardingStep = saved > 0 ? saved : 1
     }
 }

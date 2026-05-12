@@ -302,14 +302,17 @@ struct ModelDropdownRow: View {
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
                     } else {
-                        VStack(spacing: 3) {
-                            ForEach(models, id: \.self) { model in
-                                ModelOptionRow(name: model, isSelected: model == selected) {
-                                    onSelect(model)
+                        ScrollView {
+                            VStack(spacing: 3) {
+                                ForEach(models, id: \.self) { model in
+                                    ModelOptionRow(name: model, isSelected: model == selected) {
+                                        onSelect(model)
+                                    }
                                 }
                             }
+                            .padding(6)
                         }
-                        .padding(6)
+                        .frame(maxHeight: 140)
                     }
                 }
                 .background(
@@ -524,6 +527,7 @@ struct AboutSettingsView: View {
                         NSWorkspace.shared.open(URL(string: "https://github.com/s24b/LocalNotch/blob/main/LICENSE")!)
                     }
                     AboutLinkButton(title: "Show onboarding again", icon: "arrow.counterclockwise") {
+                        AppSettings.shared.onboardingStep = 1
                         AppSettings.shared.onboardingComplete = false
                     }
                 }

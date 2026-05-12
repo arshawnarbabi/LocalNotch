@@ -2,14 +2,16 @@ import SwiftUI
 import AppKit
 
 // MARK: - Onboarding View
-// 4-step in-panel flow. Shown on first launch until onboardingComplete is set.
-// Steps: 1 Ollama check → 2 Pick models → 3 Brave key (optional) → 4 Done
+// 5-step in-panel flow. Shown on first launch until onboardingComplete is set.
+// Steps: 1 Ollama check → 2 Text model → 3 Vision model → 4 Brave key → 5 Done
+// No skip/dismiss — user must complete all steps.
+// Current step persists to UserDefaults so quitting mid-flow resumes in place.
 
 struct OnboardingView: View {
     @ObservedObject private var settings = AppSettings.shared
-    @State private var step: Int = 1
+    @State private var step: Int = AppSettings.shared.onboardingStep
 
-    private let totalSteps = 4
+    private let totalSteps = 5
     private let stepSpring = Animation.easeInOut(duration: 0.32)
 
     var body: some View {
@@ -25,11 +27,6 @@ struct OnboardingView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .overlay(alignment: .topTrailing) {
-            skipButton
-                .padding(.top, 12)
-                .padding(.trailing, 14)
-        }
     }
 
     // MARK: Step Indicator
@@ -39,21 +36,10 @@ struct OnboardingView: View {
             ForEach(1...totalSteps, id: \.self) { i in
                 Capsule()
                     .fill(Color.white.opacity(i == step ? 1.0 : 0.25))
-                    .frame(width: i == step ? 20 : 12, height: 4)
+                    .frame(width: i == step ? 20 : 10, height: 4)
                     .animation(stepSpring, value: step)
             }
         }
-    }
-
-    // MARK: Skip
-
-    private var skipButton: some View {
-        Image(systemName: "xmark")
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundColor(.white.opacity(0.45))
-            .frame(width: 24, height: 24)
-            .modifier(GlassSphereModifier())
-            .overlay(AppKitTapHandler { dismiss() })
     }
 
     // MARK: Step Content
@@ -66,17 +52,24 @@ struct OnboardingView: View {
                 .transition(stepTransition)
                 .id("step1")
         case 2:
-            PickModelsStep(onNext: advance)
+            PickTextModelStep(onNext: advance)
                 .transition(stepTransition)
                 .id("step2")
         case 3:
-            BraveKeyStep(onNext: advance)
+            PickVisionModelStep(onNext: advance)
                 .transition(stepTransition)
                 .id("step3")
         case 4:
-            DoneStep(onFinish: { AppSettings.shared.onboardingComplete = true })
+            BraveKeyStep(onNext: advance)
                 .transition(stepTransition)
                 .id("step4")
+        case 5:
+            DoneStep(onFinish: {
+                AppSettings.shared.onboardingStep = 1
+                AppSettings.shared.onboardingComplete = true
+            })
+            .transition(stepTransition)
+            .id("step5")
         default:
             EmptyView()
         }
@@ -90,11 +83,9 @@ struct OnboardingView: View {
     }
 
     private func advance() {
-        withAnimation(stepSpring) { step = min(step + 1, totalSteps) }
-    }
-
-    private func dismiss() {
-        AppSettings.shared.onboardingComplete = true
+        let next = min(step + 1, totalSteps)
+        AppSettings.shared.onboardingStep = next
+        withAnimation(stepSpring) { step = next }
     }
 }
 
@@ -155,18 +146,18 @@ private struct OllamaCheckStep: View {
 
     private var statusTitle: String {
         switch ollamaState {
-        case .checking:    return "Looking for Ollama…"
-        case .running:     return "Ollama detected"
-        case .notRunning:  return "Ollama isn't running"
+        case .checking:     return "Looking for Ollama…"
+        case .running:      return "Ollama detected"
+        case .notRunning:   return "Ollama isn't running"
         case .notInstalled: return "Ollama not found"
         }
     }
 
     private var statusSubtitle: String {
         switch ollamaState {
-        case .checking:    return ""
-        case .running:     return "All good — continuing setup."
-        case .notRunning:  return "Open the Ollama app, then check again."
+        case .checking:     return ""
+        case .running:      return "All good — continuing setup."
+        case .notRunning:   return "Open the Ollama app, then check again."
         case .notInstalled: return "Install Ollama to get started."
         }
     }
@@ -215,7 +206,6 @@ private struct OllamaCheckStep: View {
                 withAnimation(.spring(response: 0.38, dampingFraction: 0.75)) {
                     ollamaState = .running
                 }
-                // Auto-advance after brief confirmation moment
                 try? await Task.sleep(for: .milliseconds(900))
                 onNext()
             } else {
@@ -228,16 +218,15 @@ private struct OllamaCheckStep: View {
     }
 }
 
-// MARK: - Step 2: Pick Models
+// MARK: - Step 2: Pick Text Model
 
-private struct PickModelsStep: View {
+private struct PickTextModelStep: View {
     let onNext: () -> Void
 
     @ObservedObject private var settings = AppSettings.shared
     @State private var availableModels: [String] = []
     @State private var loading = true
-    @State private var textOpen = false
-    @State private var visionOpen = false
+    @State private var isOpen = false
 
     private var canContinue: Bool { !settings.textModelName.isEmpty }
 
@@ -245,37 +234,28 @@ private struct PickModelsStep: View {
         VStack(spacing: 16) {
             Spacer()
 
-            Text("Choose your models")
-                .font(.system(size: 18, weight: .medium))
-                .foregroundColor(.white)
-
-            VStack(spacing: 10) {
-                ModelDropdownRow(
-                    label: "Text model",
-                    selected: settings.textModelName,
-                    models: availableModels,
-                    isLoading: loading,
-                    isOpen: $textOpen,
-                    onSelect: {
-                        settings.textModelName = $0
-                        withAnimation(.easeInOut(duration: 0.12)) { textOpen = false }
-                    }
-                )
-                .zIndex(textOpen ? 1 : 0)
-
-                ModelDropdownRow(
-                    label: "Vision model (optional)",
-                    selected: settings.visionModelName,
-                    models: availableModels,
-                    isLoading: loading,
-                    isOpen: $visionOpen,
-                    onSelect: {
-                        settings.visionModelName = $0
-                        withAnimation(.easeInOut(duration: 0.12)) { visionOpen = false }
-                    }
-                )
-                .zIndex(visionOpen ? 1 : 0)
+            VStack(spacing: 6) {
+                Text("Choose a text model")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(.white)
+                Text("Required — handles all chat and reasoning.")
+                    .font(.system(size: 12))
+                    .foregroundColor(.white.opacity(0.5))
+                    .multilineTextAlignment(.center)
             }
+            .padding(.horizontal, 24)
+
+            ModelDropdownRow(
+                label: "Text model",
+                selected: settings.textModelName,
+                models: availableModels,
+                isLoading: loading,
+                isOpen: $isOpen,
+                onSelect: {
+                    settings.textModelName = $0
+                    withAnimation(.easeInOut(duration: 0.12)) { isOpen = false }
+                }
+            )
             .padding(.horizontal, 24)
 
             OnboardingButton(
@@ -300,7 +280,70 @@ private struct PickModelsStep: View {
     }
 }
 
-// MARK: - Step 3: Brave Key
+// MARK: - Step 3: Pick Vision Model
+
+private struct PickVisionModelStep: View {
+    let onNext: () -> Void
+
+    @ObservedObject private var settings = AppSettings.shared
+    @State private var availableModels: [String] = []
+    @State private var loading = true
+    @State private var isOpen = false
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Spacer()
+
+            VStack(spacing: 6) {
+                Text("Vision model")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(.white)
+                Text("Optional — enables screenshot analysis.\nYou can add one later in Settings.")
+                    .font(.system(size: 12))
+                    .foregroundColor(.white.opacity(0.5))
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.horizontal, 24)
+
+            ModelDropdownRow(
+                label: "Vision model (optional)",
+                selected: settings.visionModelName,
+                models: availableModels,
+                isLoading: loading,
+                isOpen: $isOpen,
+                onSelect: {
+                    settings.visionModelName = $0
+                    withAnimation(.easeInOut(duration: 0.12)) { isOpen = false }
+                }
+            )
+            .padding(.horizontal, 24)
+
+            HStack(spacing: 12) {
+                OnboardingButton(label: "Skip", icon: "arrow.right") { onNext() }
+                if !settings.visionModelName.isEmpty {
+                    OnboardingButton(label: "Continue", icon: "checkmark") { onNext() }
+                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                }
+            }
+            .animation(.spring(response: 0.28, dampingFraction: 0.72), value: settings.visionModelName.isEmpty)
+
+            Spacer()
+        }
+        .task { await loadModels() }
+    }
+
+    private func loadModels() async {
+        guard let url = URL(string: "http://localhost:11434/api/tags") else { loading = false; return }
+        do {
+            let (data, _) = try await OllamaAPI.statusSession.data(from: url)
+            let decoded = try JSONDecoder().decode(OllamaTagsResponse.self, from: data)
+            availableModels = decoded.models.map(\.name).sorted()
+        } catch {}
+        loading = false
+    }
+}
+
+// MARK: - Step 4: Brave Key
 
 private struct BraveKeyStep: View {
     let onNext: () -> Void
@@ -368,11 +411,10 @@ private struct BraveKeyStep: View {
     }
 }
 
-// MARK: - Step 4: Done
+// MARK: - Step 5: Done
 
 private struct DoneStep: View {
     let onFinish: () -> Void
-    @State private var hintVisible = true
 
     var body: some View {
         VStack(spacing: 14) {
@@ -382,19 +424,14 @@ private struct DoneStep: View {
                 .font(.system(size: 22, weight: .medium))
                 .foregroundColor(.white)
 
-            Text(hintVisible ? "Hover over the notch anytime to open." : "")
+            Text("Hover over the notch anytime to open.")
                 .font(.system(size: 12))
                 .foregroundColor(.white.opacity(0.45))
-                .animation(.easeOut(duration: 0.4), value: hintVisible)
                 .frame(height: 16)
 
             OnboardingButton(label: "Let's go", icon: "sparkles") { onFinish() }
 
             Spacer()
-        }
-        .task {
-            try? await Task.sleep(for: .seconds(2.5))
-            withAnimation { hintVisible = false }
         }
     }
 }
@@ -434,7 +471,7 @@ struct OnboardingButton: View {
     }
 }
 
-// MARK: - Pulsing Dot (onboarding Ollama check indicator)
+// MARK: - Pulsing Dot (Ollama check indicator)
 
 private struct PulsingDot: View {
     private let sizes: [CGFloat] = [4, 6, 9, 6]

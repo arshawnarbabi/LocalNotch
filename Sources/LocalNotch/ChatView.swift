@@ -225,7 +225,7 @@ struct ChatView: View {
                     .font(.system(size: 13))
                     .focused($inputFocused)
                     .onSubmit { sendMessage() }
-                    .onChange(of: inputFocused) { focused in
+                    .onChange(of: inputFocused) { _, focused in
                         if !focused && inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isHoveringInput {
                             hoverExitTask?.cancel()
                             hoverExitTask = Task {

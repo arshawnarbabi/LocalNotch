@@ -249,7 +249,7 @@ struct ModelsSettingsView: View {
             ollamaStatus = .unreachable; return
         }
         do {
-            let (data, response) = try await URLSession.shared.data(from: url)
+            let (data, response) = try await OllamaAPI.statusSession.data(from: url)
             guard (response as? HTTPURLResponse)?.statusCode == 200 else {
                 ollamaStatus = .unreachable; return
             }
@@ -260,11 +260,6 @@ struct ModelsSettingsView: View {
             ollamaStatus = .unreachable
         }
     }
-}
-
-private struct OllamaTagsResponse: Decodable {
-    struct Model: Decodable { let name: String }
-    let models: [Model]
 }
 
 // MARK: - Model Dropdown

@@ -8,7 +8,6 @@ import AppKit
 struct OnboardingView: View {
     @ObservedObject private var settings = AppSettings.shared
     @State private var step: Int = 1
-    @State private var direction: Int = 1  // +1 forward, -1 backward
 
     private let totalSteps = 4
     private let stepSpring = Animation.easeInOut(duration: 0.32)
@@ -84,15 +83,13 @@ struct OnboardingView: View {
     }
 
     private var stepTransition: AnyTransition {
-        let offset: CGFloat = direction > 0 ? 20 : -20
-        return .asymmetric(
-            insertion: .opacity.combined(with: .offset(y: offset)),
-            removal:   .opacity.combined(with: .offset(y: -offset))
+        .asymmetric(
+            insertion: .opacity.combined(with: .offset(y: 20)),
+            removal:   .opacity.combined(with: .offset(y: -20))
         )
     }
 
     private func advance() {
-        direction = 1
         withAnimation(stepSpring) { step = min(step + 1, totalSteps) }
     }
 
@@ -187,7 +184,7 @@ private struct OllamaCheckStep: View {
         case .notRunning:
             HStack(spacing: 12) {
                 OnboardingButton(label: "Open Ollama", icon: "arrow.up.right.square") {
-                    NSWorkspace.shared.open(URL(string: "ollama://")!)
+                    NSWorkspace.shared.open(URL(fileURLWithPath: "/Applications/Ollama.app"))
                 }
                 OnboardingButton(label: "Check again", icon: "arrow.clockwise") {
                     ollamaState = .checking
@@ -213,7 +210,7 @@ private struct OllamaCheckStep: View {
             ollamaState = .notInstalled; return
         }
         do {
-            let (_, response) = try await URLSession.shared.data(from: url)
+            let (_, response) = try await OllamaAPI.statusSession.data(from: url)
             if (response as? HTTPURLResponse)?.statusCode == 200 {
                 withAnimation(.spring(response: 0.38, dampingFraction: 0.75)) {
                     ollamaState = .running
@@ -295,17 +292,12 @@ private struct PickModelsStep: View {
     private func loadModels() async {
         guard let url = URL(string: "http://localhost:11434/api/tags") else { loading = false; return }
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
-            let decoded = try JSONDecoder().decode(OllamaTagsResponseOnboarding.self, from: data)
+            let (data, _) = try await OllamaAPI.statusSession.data(from: url)
+            let decoded = try JSONDecoder().decode(OllamaTagsResponse.self, from: data)
             availableModels = decoded.models.map(\.name).sorted()
         } catch {}
         loading = false
     }
-}
-
-private struct OllamaTagsResponseOnboarding: Decodable {
-    struct Model: Decodable { let name: String }
-    let models: [Model]
 }
 
 // MARK: - Step 3: Brave Key

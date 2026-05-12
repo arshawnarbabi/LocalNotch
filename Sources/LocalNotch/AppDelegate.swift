@@ -64,7 +64,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     self.collapseTask?.cancel()
                     self.collapseTask = Task {
                         try? await Task.sleep(for: .milliseconds(200))
-                        guard !Task.isCancelled, !notch.isHovering else { return }
+                        guard !Task.isCancelled, !notch.isHovering,
+                              !AppSettings.shared.showingSettings else { return }
                         self.isCurrentlyExpanded = false
                         await notch.compact()
                     }

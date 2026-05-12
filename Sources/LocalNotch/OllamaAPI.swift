@@ -29,10 +29,23 @@ private struct OllamaChatChunk: Codable {
     let done: Bool
 }
 
+struct OllamaTagsResponse: Decodable {
+    struct Model: Decodable { let name: String }
+    let models: [Model]
+}
+
 final class OllamaAPI: Sendable {
     static let shared = OllamaAPI()
     static var textModel: String   { UserDefaults.standard.string(forKey: "textModelName") ?? "" }
     static var visionModel: String { UserDefaults.standard.string(forKey: "visionModelName") ?? "" }
+
+    // Short-timeout session for Ollama status/tag probes — avoids 60s hangs when Ollama is unreachable.
+    static let statusSession: URLSession = {
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.timeoutIntervalForRequest = 7
+        cfg.timeoutIntervalForResource = 7
+        return URLSession(configuration: cfg)
+    }()
 
     func chat(messages: [OllamaMessage], model: String) -> AsyncThrowingStream<String, Error> {
         AsyncThrowingStream { continuation in

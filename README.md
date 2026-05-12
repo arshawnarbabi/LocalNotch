@@ -378,7 +378,6 @@ These are documented accepted limitations for the v0.1.0 beta.
 
 | Limitation | Notes |
 |---|---|
-| **Limited input in full-screen Spaces** | Keyboard and click input in the notch panel doesn't reliably reach the app when another app is in a macOS full-screen Space. Screenshots of full-screen apps work fine (handled via ScreenCaptureKit), but to type a prompt you'll need to leave full-screen first. This may be fixed in a future release. |
 | **Text and image input only** | No voice, audio, file, or PDF attachments. Image input is via the in-app screenshot button only. |
 | **Single-display capture** | The screenshot button captures only the main display. |
 | **No conversation persistence** | Chat history lives in memory. Quitting the app loses it. |
@@ -500,12 +499,6 @@ By design. All Ollama requests are sent with `think: false`, which suppresses ch
 ### I want to run onboarding again to change my model or name
 
 Go to **Settings → About → Show onboarding again**.
-
----
-
-### The app doesn't respond to keyboard input when another app is in full-screen
-
-Known limitation. Full-screen Spaces interfere with the notch panel's ability to receive key and click events. Switch the other app out of full-screen mode, then try again. Note: this only affects *input* — taking screenshots of full-screen apps works fine via ScreenCaptureKit.
 
 ---
 

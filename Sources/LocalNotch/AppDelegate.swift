@@ -17,6 +17,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
         setupNotch()
         setupStatusItem()
+        if !AppSettings.shared.onboardingComplete {
+            Task {
+                try? await Task.sleep(for: .milliseconds(600))
+                isCurrentlyExpanded = true
+                await notch?.expand()
+            }
+        }
     }
 
     private func setupNotch() {

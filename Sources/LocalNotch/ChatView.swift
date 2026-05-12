@@ -387,7 +387,7 @@ struct ChatView: View {
         })
         .overlay(AppKitTapHandler(
             action: { captureScreen() },
-            longPressAction: { state.capturedImage = nil },
+            longPressAction: { state.capturedImage = nil; state.capturedImageBase64 = nil },
             onPressChanged: { pressing in
                 capturePressed = pressing
                 ringDelayTask?.cancel()
@@ -424,11 +424,14 @@ struct ChatView: View {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !state.isLoading, !state.isSearching, !isErasing else { return }
 
-        // Snapshot and convert image on main thread — NSImage is not thread-safe
-        let imageBase64 = state.capturedImage.flatMap { imageToBase64($0) }
+        // Use the base64 pre-computed at capture time directly from the raw CGImage.
+        // Do NOT re-extract via NSImage.cgImage() — that call can return nil on a
+        // zero-sized NSImage, making imageBase64 nil and unblocking the search classifier.
+        let imageBase64 = state.capturedImageBase64
 
         inputText = ""
         state.capturedImage = nil
+        state.capturedImageBase64 = nil
         state.lastSearchQuery = nil   // clear previous badge before new turn
         withAnimation(springAnim) { isInputExpanded = false }
         inputFocused = false
@@ -747,7 +750,14 @@ If asked whether a web search was performed, say YES.</instruction>
 
                 let cgImage = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
                 state.isCapturing = false
-                state.capturedImage = NSImage(cgImage: cgImage, size: .zero)
+                // Convert to base64 NOW from the raw CGImage — before wrapping in NSImage.
+                // NSImage.cgImage(forProposedRect:) can return nil on a zero-sized image,
+                // which would make imageBase64 nil at send time and allow web search to fire.
+                state.capturedImageBase64 = cgImageToBase64JPEG(cgImage)
+                let scale = NSScreen.main?.backingScaleFactor ?? 2.0
+                state.capturedImage = NSImage(cgImage: cgImage,
+                    size: NSSize(width: CGFloat(cgImage.width) / scale,
+                                 height: CGFloat(cgImage.height) / scale))
                 flashScreen()
             } catch {
                 state.isCapturing = false
@@ -786,6 +796,27 @@ If asked whether a web search was performed, say YES.</instruction>
                 w.animator().alphaValue = 0
             }, completionHandler: { w.close() })
         })
+    }
+
+    // Converts a CGImage directly to a base64 JPEG string. Used at capture time so
+    // we never have to go through NSImage.cgImage() later, which can return nil.
+    private func cgImageToBase64JPEG(_ cgImage: CGImage, maxDimension: Int = 1280) -> String? {
+        let w = cgImage.width, h = cgImage.height
+        let scale = min(Double(maxDimension) / Double(max(w, h)), 1.0)
+        let newW = max(1, Int(Double(w) * scale))
+        let newH = max(1, Int(Double(h) * scale))
+        let ctx = CGContext(data: nil, width: newW, height: newH,
+            bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
+        ctx?.interpolationQuality = .high
+        ctx?.draw(cgImage, in: CGRect(x: 0, y: 0, width: newW, height: newH))
+        guard let resized = ctx?.makeImage() else { return nil }
+        let data = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(data, "public.jpeg" as CFString, 1, nil) else { return nil }
+        CGImageDestinationAddImage(dest, resized, [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary)
+        guard CGImageDestinationFinalize(dest) else { return nil }
+        return (data as Data).base64EncodedString()
     }
 
     private func imageToBase64(_ image: NSImage, maxDimension: Int = 1280) -> String? {

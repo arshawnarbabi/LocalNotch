@@ -22,6 +22,7 @@ class ChatState: ObservableObject {
     @Published var showCompletionCheck = false
     @Published var chatHistory: [ChatTurn] = []
     @Published var capturedImage: NSImage? = nil
+    @Published var capturedImageBase64: String? = nil
     @Published var isCapturing = false
     @Published var lastSearchQuery: String? = nil
 
@@ -91,6 +92,7 @@ class ChatState: ObservableObject {
         showCompletionCheck = false
         lastPrompt = ""
         capturedImage = nil
+        capturedImageBase64 = nil
         isCapturing = false
         lastSearchQuery = nil
     }

@@ -703,6 +703,11 @@ If asked whether a web search was performed, say YES.</instruction>
         // code signature — so ad-hoc re-signed builds don't lose the grant each time.
         guard CGPreflightScreenCaptureAccess() else {
             CGRequestScreenCaptureAccess()
+            // TCC changes don't apply to the running process. Show a message so the
+            // user knows to relaunch — without this they get the popup on every press.
+            state.currentResponse = "**Screen Recording permission required.**\n\nGrant access in the System Settings window that just opened, then **quit and relaunch LocalNotch** (⌘Q from the menu bar). The change won't take effect in the current session."
+            state.isLoading = false
+            state.showCompletionCheck = false
             return
         }
 

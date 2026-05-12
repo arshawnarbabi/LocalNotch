@@ -28,16 +28,7 @@ class ChatState: ObservableObject {
     private var history: [ChatMessage] = []
     private var lastPrompt: String = ""
 
-    func prepareForSend(_ text: String) -> [OllamaMessage] {
-        lastPrompt = text
-        history.append(ChatMessage(role: "user", content: text))
-        currentResponse = ""
-        isLoading = true
-        showCompletionCheck = false
-        // Note: lastSearchQuery is managed by ChatView around the search call so the
-        // badge can show during the .searching phase. Don't clear it here.
-        // Non-overridable preamble — web search is a system capability, not personality.
-        // Placed at the very start of the system message where models attend to it most.
+    private func makeSystemMessage() -> OllamaMessage {
         let preamble = """
         CAPABILITY: This assistant has real-time web search via Brave Search API. \
         When <web_search> blocks appear in the conversation, those are REAL results \
@@ -45,8 +36,28 @@ class ChatState: ObservableObject {
         If the user asks "did you search the web?" and a <web_search> block exists in \
         this conversation, the answer is YES. Never deny having web search capability.
         """
-        let system = OllamaMessage(role: "system", content: preamble + "\n\n" + AppSettings.shared.systemPrompt)
-        return [system] + history.map { OllamaMessage(role: $0.role, content: $0.content) }
+        return OllamaMessage(role: "system", content: preamble + "\n\n" + AppSettings.shared.systemPrompt)
+    }
+
+    func prepareForSend(_ text: String) -> [OllamaMessage] {
+        lastPrompt = text
+        history.append(ChatMessage(role: "user", content: text))
+        currentResponse = ""
+        isLoading = true
+        showCompletionCheck = false
+        return [makeSystemMessage()] + history.map { OllamaMessage(role: $0.role, content: $0.content) }
+    }
+
+    // Vision queries must NOT carry prior conversation history — text context causes vision
+    // models to hallucinate image content based on what was discussed earlier in the session.
+    // The turn is still recorded in history so future text turns have the response as context.
+    func prepareVisionMessage(_ text: String) -> [OllamaMessage] {
+        lastPrompt = text
+        history.append(ChatMessage(role: "user", content: text))
+        currentResponse = ""
+        isLoading = true
+        showCompletionCheck = false
+        return [makeSystemMessage(), OllamaMessage(role: "user", content: text)]
     }
 
     func appendToken(_ token: String) {

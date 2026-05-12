@@ -63,8 +63,13 @@ LocalNotch is a macOS AI assistant that lives in your MacBook's notch. Hover to 
 
 1. Download `LocalNotch.zip` from [Releases](https://github.com/s24b/LocalNotch/releases).
 2. Unzip and drag `LocalNotch.app` to your Applications folder.
-3. **Do not double-click to launch.** macOS will block it with a "cannot be opened because the developer cannot be verified" dialog because the app is ad-hoc signed, not notarized.
-4. Instead: **right-click `LocalNotch.app` → Open** → click **Open** in the dialog that appears. You only need to do this once — after that you can launch normally.
+3. **Do not double-click to launch.** macOS will block it because the app is ad-hoc signed, not notarized.
+4. To bypass Gatekeeper — the steps differ by macOS version:
+   - **macOS 14 (Sonoma):** Right-click `LocalNotch.app` → **Open** → click **Open** in the dialog. Done.
+   - **macOS 15 (Sequoia) or macOS 26 (Tahoe):** Right-click → Open no longer bypasses Gatekeeper. Instead: attempt to open the app (it will be blocked), then open **System Settings → Privacy & Security**, scroll to the **Security** section at the bottom, and click **Open Anyway**. Confirm your password and click **Open Anyway** again.
+   - **Terminal fallback (works on all versions):** `xattr -dr com.apple.quarantine /Applications/LocalNotch.app`
+
+   Either way, you only need to do this once — after that you can launch normally.
 5. When prompted, grant **Screen Recording** permission. This is required to capture screenshots for vision queries.
 
 ### Option B — Build from source
@@ -75,7 +80,7 @@ cd LocalNotch
 ./scripts/release.sh
 ```
 
-The script compiles a release binary, assembles a proper `.app` bundle, ad-hoc signs it, and produces `LocalNotch.zip` in the repo root. Unzip and move to Applications, then right-click → Open as above.
+The script compiles a release binary, assembles a proper `.app` bundle, ad-hoc signs it, and produces `LocalNotch.zip` in the repo root. Unzip and move to Applications, then follow the Gatekeeper bypass steps in [Installation → step 4](#installation) for your macOS version.
 
 See [Building from Source](#building-from-source) for full details.
 
@@ -285,7 +290,7 @@ cd LocalNotch
 
 # 3. Install
 unzip LocalNotch.zip -d /Applications/
-# Right-click → Open on first launch to bypass Gatekeeper
+# See Installation → step 4 for how to bypass Gatekeeper on first launch (differs by macOS version)
 ```
 
 Or, if you only want the binary without a zip:
@@ -350,7 +355,7 @@ Services:
 - **Debounced hover** — the notch expand/compact is debounced with a 200ms grace period to prevent layout-recalculation flicker from causing a race condition between `expand()` and `compact()`.
 - **Non-overridable system prompt preamble** — web search capability declarations are prepended in `ChatState.prepareForSend()`, not in the user-editable system prompt, so models can't be talked out of acknowledging search results.
 - **History sync on search** — after building the augmented message (user text + `<web_search>` block), `updateLastUserContent()` writes the full augmented string back into the conversation history so follow-up turns see the same context the model saw.
-- **`CGWindowListCreateImage` + bundle ID TCC** — Screen Recording permission is keyed to the bundle ID (`com.localnotch`), not the code signature, so ad-hoc re-signed builds don't lose the TCC grant each time.
+- **SCScreenshotManager + identifier-based designated requirement** — the release script pins the codesign designated requirement to the bundle identifier (`com.localnotch`) rather than letting it default to a cdhash. macOS TCC keys Screen Recording permission to the DR, so ad-hoc re-signed builds don't lose the grant each time. `CGWindowListCreateImage` was removed — it is fully obsoleted on macOS 15+.
 - **Vision detection** — `OllamaTagsResponse.Model.isVisionCapable` checks the model's `families` metadata for CLIP, mllama, and moondream families, plus name-based heuristics for LLaVA and `-vl` variants.
 
 ---
@@ -366,7 +371,7 @@ These are documented accepted limitations for the v0.1.0 beta.
 | **Single-display capture** | The screenshot button captures only the main display. |
 | **No conversation persistence** | Chat history lives in memory. Quitting the app loses it. |
 | **No auto-update** | Check [Releases](https://github.com/s24b/LocalNotch/releases) manually. |
-| **Screen Recording re-prompt** | macOS 15 and 26 re-prompt for Screen Recording permission roughly every 7 days for ad-hoc-signed apps. This is a macOS policy; it cannot be fixed without an Apple Developer notarization. |
+| **Screen Recording re-prompt** | macOS 15.0 (Sequoia) re-prompts for Screen Recording permission approximately once a month for non-notarized apps. macOS 15.1 and later (including macOS 26 Tahoe) reduced this further — prompts become less frequent the more regularly you use the app. This is a macOS policy; it cannot be fixed without an Apple Developer account and notarization. |
 | **Apple Silicon only** | Intel Macs are not supported. |
 | **Localhost Ollama only** | Remote or custom-URL Ollama instances are not supported in v0.1. |
 | **API key in UserDefaults** | The Brave Search API key is stored in `UserDefaults`, not in Keychain. It is stored locally on your machine and never transmitted anywhere. |
@@ -380,7 +385,13 @@ These are documented accepted limitations for the v0.1.0 beta.
 
 ### "The application cannot be opened" / "cannot be opened because the developer cannot be verified"
 
-This is Gatekeeper blocking an unsigned/ad-hoc-signed app. **Do not double-click to open.** Instead: right-click `LocalNotch.app` → **Open** → click **Open** in the dialog. You only need to do this once.
+This is Gatekeeper blocking an ad-hoc-signed app. **Do not double-click.** The bypass steps differ by macOS version:
+
+- **macOS 14 (Sonoma):** Right-click `LocalNotch.app` → **Open** → click **Open** in the dialog.
+- **macOS 15 (Sequoia) or macOS 26 (Tahoe):** Attempt to open the app (it will be blocked), then go to **System Settings → Privacy & Security**, scroll to the **Security** section, and click **Open Anyway**. Confirm your password and click **Open Anyway** again.
+- **Terminal fallback (any version):** `xattr -dr com.apple.quarantine /Applications/LocalNotch.app`
+
+You only need to do this once.
 
 ---
 
@@ -436,9 +447,9 @@ This means the model's training strongly overrides in-context instructions. Ensu
 
 ---
 
-### Screen Recording permission gets revoked every week
+### Screen Recording permission prompt keeps reappearing
 
-This is expected behavior for ad-hoc-signed apps on macOS 15 and later. Apple's TCC policy re-prompts roughly every 7 days. When the prompt appears, click **Allow** again. This cannot be fixed without a full Apple Developer account and notarization.
+This is expected behavior for non-notarized apps on macOS 15 and later. On macOS 15.0 (Sequoia) the prompt appears approximately once a month; on macOS 15.1 and later (including macOS 26 Tahoe) it becomes less frequent the more regularly you use the app. When the prompt appears, click **Allow** again. This cannot be fixed without a full Apple Developer account and notarization.
 
 ---
 

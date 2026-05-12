@@ -447,7 +447,10 @@ struct ChatView: View {
             // Show typing dots in the compact view while we run the classifier.
             await MainActor.run { state.isLoading = true }
 
-            let query = await decideSearchQuery(from: text)
+            // Web search is disabled for vision requests — the model must focus entirely
+            // on the image. The classifier would otherwise fire on prompts like "what do
+            // you see?" and contaminate the vision context with irrelevant search results.
+            let query = imageBase64 != nil ? nil : await decideSearchQuery(from: text)
             guard !Task.isCancelled else {
                 await MainActor.run { state.isLoading = false }
                 return
@@ -478,7 +481,9 @@ If asked whether a web search was performed, say YES.</instruction>
 </web_search>
 """
                 messages = await MainActor.run {
-                    let msgs = state.prepareForSend(text)
+                    let msgs = imageBase64 != nil
+                        ? state.prepareVisionMessage(text)
+                        : state.prepareForSend(text)
                     state.updateLastUserContent(augmented)
                     return msgs
                 }
@@ -490,7 +495,11 @@ If asked whether a web search was performed, say YES.</instruction>
                     )
                 }
             } else {
-                messages = await MainActor.run { state.prepareForSend(text) }
+                messages = await MainActor.run {
+                    imageBase64 != nil
+                        ? state.prepareVisionMessage(text)
+                        : state.prepareForSend(text)
+                }
                 if let imgData = imageBase64,
                    let lastIdx = messages.lastIndex(where: { $0.role == "user" }) {
                     messages[lastIdx] = OllamaMessage(

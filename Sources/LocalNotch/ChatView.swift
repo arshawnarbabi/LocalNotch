@@ -713,22 +713,33 @@ If asked whether a web search was performed, say YES.</instruction>
 
         state.isCapturing = true
 
-        // Use the bottom-most elevated window (our notch panel) as the exclusion
-        // boundary — everything below it is captured, our panel is omitted.
+        // Attempt 1: exclude our notch panel so it doesn't appear in the screenshot.
+        // Find the lowest window number at screenSaver level — that's our panel.
+        // On macOS 15+ this can return nil if the window isn't compositable; we fall
+        // back rather than silently failing.
         let topWindowID = NSApp.windows
             .filter { $0.level.rawValue >= NSWindow.Level.screenSaver.rawValue }
             .compactMap { $0.windowNumber > 0 ? CGWindowID($0.windowNumber) : nil }
             .min()
 
-        let cgImage: CGImage?
+        var cgImage: CGImage?
         if let wid = topWindowID {
             cgImage = CGWindowListCreateImage(.infinite, .optionOnScreenBelowWindow, wid, .bestResolution)
-        } else {
+        }
+
+        // Attempt 2: full-screen capture (notch panel may appear; still useful).
+        if cgImage == nil {
             cgImage = CGWindowListCreateImage(.infinite, .optionAll, kCGNullWindowID, .bestResolution)
         }
 
         state.isCapturing = false
-        guard let cgImage else { return }
+
+        guard let cgImage else {
+            state.currentResponse = "Screenshot failed. Make sure Screen Recording is enabled in **System Settings → Privacy & Security → Screen Recording**, then relaunch LocalNotch."
+            state.isLoading = false
+            return
+        }
+
         state.capturedImage = NSImage(cgImage: cgImage, size: NSZeroSize)
         flashScreen()
     }

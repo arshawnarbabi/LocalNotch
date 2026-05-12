@@ -361,7 +361,7 @@ These are documented accepted limitations for the v0.1.0 beta.
 
 | Limitation | Notes |
 |---|---|
-| **No full-screen Space support** | Input doesn't reliably receive click events when another app is in a macOS full-screen Space, and screenshots taken while a full-screen app is active may not capture correctly. Workaround: leave full-screen mode before using LocalNotch. This may be fixed in a future release. |
+| **Limited input in full-screen Spaces** | Keyboard and click input in the notch panel doesn't reliably reach the app when another app is in a macOS full-screen Space. Screenshots of full-screen apps work fine (handled via ScreenCaptureKit), but to type a prompt you'll need to leave full-screen first. This may be fixed in a future release. |
 | **Text and image input only** | No voice, audio, file, or PDF attachments. Image input is via the in-app screenshot button only. |
 | **Single-display capture** | The screenshot button captures only the main display. |
 | **No conversation persistence** | Chat history lives in memory. Quitting the app loses it. |
@@ -482,7 +482,7 @@ Go to **Settings → About → Show onboarding again**.
 
 ### The app doesn't respond to keyboard input when another app is in full-screen
 
-Known limitation. Full-screen Spaces interfere with the notch panel's ability to receive key events. Switch the other app out of full-screen mode, then try again.
+Known limitation. Full-screen Spaces interfere with the notch panel's ability to receive key and click events. Switch the other app out of full-screen mode, then try again. Note: this only affects *input* — taking screenshots of full-screen apps works fine via ScreenCaptureKit.
 
 ---
 

@@ -72,13 +72,6 @@ struct SettingsView: View {
                 .animation(nil, value: activeSection)
 
             Spacer()
-
-            Image(systemName: "xmark")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(.white.opacity(0.65))
-                .frame(width: 26, height: 26)
-                .modifier(GlassSphereModifier())
-                .overlay(AppKitTapHandler { AppSettings.shared.showingSettings = false })
         }
         .padding(.horizontal, 14)
         .padding(.top, 14)
@@ -532,7 +525,6 @@ struct AboutSettingsView: View {
                     }
                     AboutLinkButton(title: "Show onboarding again", icon: "arrow.counterclockwise") {
                         AppSettings.shared.onboardingComplete = false
-                        AppSettings.shared.showingSettings = false
                     }
                 }
             }

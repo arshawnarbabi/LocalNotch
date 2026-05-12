@@ -11,6 +11,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var collapseTask: Task<Void, Never>?
     private var isCurrentlyExpanded = false
     private var statusItem: NSStatusItem?
+    private var settingsWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -64,8 +65,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     self.collapseTask?.cancel()
                     self.collapseTask = Task {
                         try? await Task.sleep(for: .milliseconds(200))
-                        guard !Task.isCancelled, !notch.isHovering,
-                              !AppSettings.shared.showingSettings else { return }
+                        guard !Task.isCancelled, !notch.isHovering else { return }
                         self.isCurrentlyExpanded = false
                         await notch.compact()
                     }
@@ -86,10 +86,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openSettings() {
-        AppSettings.shared.showingSettings = true
-        guard !isCurrentlyExpanded else { return }
-        isCurrentlyExpanded = true
-        Task { await notch?.expand() }
+        if settingsWindow == nil {
+            let controller = NSHostingController(rootView:
+                SettingsView()
+                    .frame(width: 360, height: 480)
+                    .background(Color.black)
+            )
+            let window = NSWindow(contentViewController: controller)
+            window.title = "LocalNotch — Settings"
+            window.styleMask = [.titled, .closable, .miniaturizable]
+            window.backgroundColor = .black
+            window.appearance = NSAppearance(named: .darkAqua)
+            window.isReleasedWhenClosed = false
+            window.setContentSize(NSSize(width: 360, height: 480))
+            window.center()
+            settingsWindow = window
+        }
+        settingsWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     @objc private func quitApp() {

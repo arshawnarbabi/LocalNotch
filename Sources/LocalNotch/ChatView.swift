@@ -48,9 +48,6 @@ struct ChatView: View {
             if !settings.onboardingComplete {
                 OnboardingView()
                     .transition(.opacity.combined(with: .scale(scale: 0.97)))
-            } else if settings.showingSettings {
-                SettingsView()
-                    .transition(.opacity.combined(with: .scale(scale: 0.97)))
             } else if showingHistory {
                 HistoryView(history: state.chatHistory) { showingHistory = false }
                     .transition(.opacity.combined(with: .scale(scale: 0.97)))
@@ -63,7 +60,6 @@ struct ChatView: View {
             }
         }
         .animation(.spring(response: 0.38, dampingFraction: 0.82), value: settings.onboardingComplete)
-        .animation(.spring(response: 0.38, dampingFraction: 0.82), value: settings.showingSettings)
         .animation(.spring(response: 0.38, dampingFraction: 0.82), value: showingHistory)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

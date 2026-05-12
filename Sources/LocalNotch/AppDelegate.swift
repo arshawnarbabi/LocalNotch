@@ -12,6 +12,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var isCurrentlyExpanded = false
     private var statusItem: NSStatusItem?
     private var settingsWindow: NSWindow?
+    private var updateMenuItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -106,11 +107,112 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if let button = statusItem?.button {
             button.image = NSImage(systemSymbolName: "sparkles", accessibilityDescription: "LocalNotch")
         }
+
         let menu = NSMenu()
+
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+        let versionItem = NSMenuItem(title: "LocalNotch v\(version)", action: nil, keyEquivalent: "")
+        versionItem.isEnabled = false
+        menu.addItem(versionItem)
+
+        menu.addItem(.separator())
+
+        let updateItem = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+        updateMenuItem = updateItem
+        menu.addItem(updateItem)
+
+        menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ","))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit LocalNotch", action: #selector(quitApp), keyEquivalent: "q"))
         statusItem?.menu = menu
+
+        // Silent background check 5s after launch — updates the menu item label if a new version exists.
+        Task {
+            try? await Task.sleep(for: .seconds(5))
+            await performUpdateCheck(userInitiated: false)
+        }
+    }
+
+    @objc private func checkForUpdates() {
+        updateMenuItem?.title = "Checking…"
+        updateMenuItem?.isEnabled = false
+        Task { await performUpdateCheck(userInitiated: true) }
+    }
+
+    private func performUpdateCheck(userInitiated: Bool) async {
+        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
+        // /releases?per_page=1 includes pre-releases; /releases/latest skips them
+        guard let url = URL(string: "https://api.github.com/repos/s24b/LocalNotch/releases?per_page=1") else { return }
+
+        var request = URLRequest(url: url)
+        request.setValue("LocalNotch/\(currentVersion)", forHTTPHeaderField: "User-Agent")
+
+        defer {
+            updateMenuItem?.title = "Check for Updates…"
+            updateMenuItem?.isEnabled = true
+        }
+
+        // Network failure
+        guard let (data, _) = try? await URLSession.shared.data(for: request) else {
+            if userInitiated {
+                showUpdateAlert(title: "Unable to Check for Updates",
+                                message: "Could not reach GitHub. Check your internet connection and try again.")
+            }
+            return
+        }
+
+        // Parse — must be an array of release objects
+        guard let releases = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            if userInitiated {
+                showUpdateAlert(title: "Unable to Check for Updates",
+                                message: "Unexpected response from GitHub. Try again later.")
+            }
+            return
+        }
+
+        // No releases published yet — treat as up to date
+        guard let latest = releases.first,
+              let tagName = latest["tag_name"] as? String,
+              let htmlURLString = latest["html_url"] as? String,
+              let releaseURL = URL(string: htmlURLString) else {
+            if userInitiated {
+                showUpdateAlert(title: "You're Up to Date",
+                                message: "LocalNotch v\(currentVersion) is the latest version.")
+            }
+            return
+        }
+
+        let latestVersion = tagName.hasPrefix("v") ? String(tagName.dropFirst()) : tagName
+
+        if latestVersion == currentVersion {
+            if userInitiated {
+                showUpdateAlert(title: "You're Up to Date",
+                                message: "LocalNotch v\(currentVersion) is the latest version.")
+            }
+        } else {
+            updateMenuItem?.title = "Update Available — v\(latestVersion)"
+            if userInitiated {
+                NSApp.activate(ignoringOtherApps: true)
+                let alert = NSAlert()
+                alert.messageText = "Update Available"
+                alert.informativeText = "LocalNotch v\(latestVersion) is available. You have v\(currentVersion)."
+                alert.addButton(withTitle: "View on GitHub")
+                alert.addButton(withTitle: "Later")
+                if alert.runModal() == .alertFirstButtonReturn {
+                    NSWorkspace.shared.open(releaseURL)
+                }
+            }
+        }
+    }
+
+    private func showUpdateAlert(title: String, message: String) {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
 
     @objc private func openSettings() {

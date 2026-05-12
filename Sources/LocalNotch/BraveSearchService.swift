@@ -4,7 +4,8 @@ final class BraveSearchService: Sendable {
     static let shared = BraveSearchService()
 
     func search(_ query: String) async -> String? {
-        let apiKey = UserDefaults.standard.string(forKey: "braveSearchAPIKey") ?? ""
+        let apiKey = (UserDefaults.standard.string(forKey: "braveSearchAPIKey") ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !apiKey.isEmpty else { return nil }
         guard let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
               let url = URL(string: "https://api.search.brave.com/res/v1/web/search?q=\(encoded)&count=5")
@@ -15,7 +16,8 @@ final class BraveSearchService: Sendable {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
         do {
-            let (data, _) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
             let parsed = try JSONDecoder().decode(BraveResponse.self, from: data)
             guard let results = parsed.web?.results, !results.isEmpty else { return nil }
             return results.prefix(5).enumerated().map { i, r in

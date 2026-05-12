@@ -492,7 +492,7 @@ Known limitation in v0.1. Responses are rendered via MarkdownUI without text sel
 
 ### My reasoning model (QwQ, DeepSeek-R1, etc.) isn't showing its thinking steps
 
-By design. All Ollama requests are sent with `think: false`, which suppresses chain-of-thought / reasoning token output and returns only the final answer. The panel is too compact to usefully display long reasoning traces. This may become configurable in a future release.
+By design. All Ollama requests are sent with `think: false`, which suppresses chain-of-thought / reasoning token output and returns only the final answer. LocalNotch is built for fast, lightweight responses — the panel is too compact to usefully display long reasoning traces. This may become configurable in a future release.
 
 ---
 

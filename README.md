@@ -515,7 +515,7 @@ Known limitation. Full-screen Spaces interfere with the notch panel's ability to
 - [swift-markdown-ui](https://github.com/gonzalezreal/swift-markdown-ui) by Guillermo Gonzalez — Markdown rendering (MIT)
 - [Brave Search API](https://api.search.brave.com) — optional live web search
 - [wttr.in](https://wttr.in) — anonymous weather data
-- [NotchNook](https://lo.cafe/notchnook) by lo.cafe — original inspiration for using the MacBook notch as a productive UI surface
+- [NotchNook](https://lo.cafe/notchnook) by lo.cafe — original inspiration for using the MacBook notch as a productive UI surface; the NotchNook app icon also served as design inspiration for the LocalNotch app icon
 
 ---
 

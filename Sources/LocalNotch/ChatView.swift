@@ -700,23 +700,21 @@ If asked whether a web search was performed, say YES.</instruction>
     }
 
     private func captureScreen() {
-        guard CGPreflightScreenCaptureAccess() else {
-            CGRequestScreenCaptureAccess()
-            state.currentResponse = "**Screen Recording permission required.**\n\nGrant access in the System Settings window that just opened, then **quit and relaunch LocalNotch** (⌘Q from the menu bar). The change won't take effect in the current session."
-            state.isLoading = false
-            state.showCompletionCheck = false
-            return
-        }
-
+        // Don't call CGPreflightScreenCaptureAccess() — on macOS 26 with ad-hoc signing
+        // it gives false negatives even when permission is actually granted, causing the
+        // System Settings popup to loop. Just call SCK directly; if permission is granted
+        // it works, if not we get a clean error.
         state.isCapturing = true
 
-        // CGWindowListCreateImage was obsoleted in macOS 15 and returns nil on macOS 15+.
-        // Use ScreenCaptureKit (SCScreenshotManager) as the sole capture path.
+        let bundleID = Bundle.main.bundleIdentifier ?? "(none)"
+
         Task { @MainActor in
             do {
                 let content = try await SCShareableContent.current
                 guard let display = content.displays.first else {
                     state.isCapturing = false
+                    state.currentResponse = "No display found.\n\n_diag: bundle=\(bundleID)_"
+                    state.isLoading = false
                     return
                 }
 
@@ -744,7 +742,16 @@ If asked whether a web search was performed, say YES.</instruction>
                 flashScreen()
             } catch {
                 state.isCapturing = false
-                state.currentResponse = "Screenshot failed.\n\nMake sure Screen Recording is enabled in **System Settings → Privacy & Security → Screen Recording**, then relaunch LocalNotch.\n\nError: \(error.localizedDescription)"
+                let nsErr = error as NSError
+                state.currentResponse = """
+                **Screenshot failed.**
+
+                Open **System Settings → Privacy & Security → Screen & System Audio Recording**, make sure **LocalNotch** is in the list and toggled ON, then **quit (⌘Q) and relaunch** LocalNotch.
+
+                If LocalNotch is already enabled, toggle it off and on again — on macOS 26, ad-hoc signed apps sometimes need a fresh grant after reinstall.
+
+                _diag: bundle=\(bundleID), err=\(nsErr.domain) #\(nsErr.code) — \(error.localizedDescription)_
+                """
                 state.isLoading = false
             }
         }

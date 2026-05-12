@@ -70,9 +70,24 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << PLIST
 </plist>
 PLIST
 
-# Ad-hoc sign (no Apple Developer account required)
-echo "==> Signing (ad-hoc)"
-codesign --force --deep --sign - --identifier "$BUNDLE_ID" "$APP_BUNDLE"
+# Ad-hoc sign with a STABLE designated requirement based on the bundle identifier.
+# Without this override, ad-hoc signing falls back to a cdhash-based designated
+# requirement, which changes on every rebuild. macOS TCC keys permissions to the
+# designated requirement, so a cdhash-based one means Screen Recording / Screen
+# Capture permission has to be re-granted after every rebuild. Pinning the DR to
+# the bundle identifier keeps it stable across rebuilds — grant once, works forever.
+echo "==> Signing (ad-hoc, stable identifier-based designated requirement)"
+codesign --force --deep --sign - \
+    --identifier "$BUNDLE_ID" \
+    -r="designated => identifier \"$BUNDLE_ID\"" \
+    "$APP_BUNDLE"
+
+# Verify the designated requirement is identifier-based, not cdhash-based.
+DR=$(codesign -d -r- "$APP_BUNDLE" 2>&1 | grep "designated =>" || true)
+echo "    $DR"
+if echo "$DR" | grep -q "cdhash"; then
+    echo "    WARNING: designated requirement is cdhash-based — TCC permissions will not persist across rebuilds."
+fi
 
 # Zip
 echo "==> Creating LocalNotch.zip"

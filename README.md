@@ -13,7 +13,7 @@ An AI assistant that lives in your Mac's notch. Hover to open, type to ask anyth
 - **Vision** — long-press the camera button to capture your screen and ask questions about it
 - **Optional web search** — bring your own Brave Search API key; if absent, web search is silently disabled
 - **Guided onboarding** — detects Ollama on first launch, walks you through model selection
-- **In-panel Settings** — switch models, update your API key, customize the system prompt, all without leaving the notch
+- **Settings** — switch models, update your API key, customize the system prompt via ⌘, from the menu bar
 - **Liquid Glass UI** — native macOS 26 Tahoe glass effect; clean fallback on macOS 14/15
 
 ---
@@ -32,8 +32,9 @@ An AI assistant that lives in your Mac's notch. Hover to open, type to ask anyth
 
 1. Download `LocalNotch.zip` from [Releases](https://github.com/s24b/LocalNotch/releases)
 2. Unzip and drag `LocalNotch.app` to your Applications folder
-3. **Right-click → Open** the first time (required to bypass Gatekeeper — the app is unsigned)
-4. Grant Screen Recording permission when prompted
+3. **Do not double-click.** macOS will block it with a "cannot be opened" error because the app is not signed with an Apple Developer certificate. This is expected.
+4. Instead: **right-click `LocalNotch.app` → Open** → click **Open** in the dialog that appears. You only need to do this once.
+5. Grant Screen Recording permission when prompted
 
 ### Option B — Build from source
 

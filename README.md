@@ -2,6 +2,14 @@
   <img src="LocalNotchBanner.svg" alt="LocalNotch" width="100%" />
 </p>
 
+<p align="center">
+  <img src="https://img.shields.io/badge/macOS-14%2B-black?style=flat-square&logo=apple&logoColor=white" alt="macOS 14+" />
+  <img src="https://img.shields.io/badge/Swift-6-F05138?style=flat-square&logo=swift&logoColor=white" alt="Swift" />
+  <img src="https://img.shields.io/badge/Ollama-local%20inference-8A2BE2?style=flat-square" alt="Ollama" />
+  <img src="https://img.shields.io/badge/Apple%20Silicon-M1%2B-black?style=flat-square&logo=apple&logoColor=white" alt="Apple Silicon" />
+  <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="MIT License" />
+</p>
+
 LocalNotch is a macOS AI assistant that lives in your MacBook's notch. Hover to open, type to ask anything — then it disappears. No window to manage, no app to switch to. Everything runs locally through [Ollama](https://ollama.com): your conversations, your screenshots, your data — nothing leaves your machine. Optionally wire in a Brave Search API key and it gains real-time web search, decided automatically by a 3-layer classifier.
 
 <p align="center">

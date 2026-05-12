@@ -419,12 +419,19 @@ struct ChatView: View {
                     await MainActor.run { state.isLoading = false }
                     return
                 }
-                messages = await MainActor.run { state.prepareForSend(text) }
+                let resultBlock = searchContext ?? "No results found for this query."
+                // Prefix the block with explicit instructions so the model knows these are real results.
+                let augmented = text + "\n\n[Live web search performed for '\(query)'. Results are real, current data from the internet — not from training data. Use them to answer. If asked whether a web search was done, say yes.\n\n\(resultBlock)]"
+                messages = await MainActor.run {
+                    let msgs = state.prepareForSend(text)
+                    // Sync history with the augmented version so follow-up turns have context.
+                    state.updateLastUserContent(augmented)
+                    return msgs
+                }
                 if let lastIdx = messages.lastIndex(where: { $0.role == "user" }) {
-                    let resultBlock = searchContext ?? "The web search returned no results for this query."
                     messages[lastIdx] = OllamaMessage(
                         role: "user",
-                        content: text + "\n\n[Web search results for '\(query)':\n\(resultBlock)]",
+                        content: augmented,
                         images: imageBase64.map { [$0] }
                     )
                 }

@@ -53,6 +53,11 @@ class ChatState: ObservableObject {
         }
     }
 
+    func updateLastUserContent(_ content: String) {
+        guard let idx = history.lastIndex(where: { $0.role == "user" }) else { return }
+        history[idx] = ChatMessage(role: "user", content: content)
+    }
+
     func resetChat() {
         history = []
         chatHistory = []

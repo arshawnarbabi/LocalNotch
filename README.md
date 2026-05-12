@@ -1,6 +1,8 @@
-# LocalNotch
+<p align="center">
+  <img src="LocalNotchBanner.svg" alt="LocalNotch" width="100%" />
+</p>
 
-An AI assistant that lives in your Mac's notch. Hover to open, type to ask anything. Fully local — powered by [Ollama](https://ollama.com), nothing leaves your machine.
+LocalNotch is a macOS AI assistant that lives in your MacBook's notch. Hover to open, type to ask anything — then it disappears. No window to manage, no app to switch to. Everything runs locally through [Ollama](https://ollama.com): your conversations, your screenshots, your data — nothing leaves your machine. Optionally wire in a Brave Search API key and it gains real-time web search, decided automatically by a 3-layer classifier.
 
 > **Beta (v0.1.0)** — Apple Silicon only. See [Known Limitations](#known-limitations) before installing.
 

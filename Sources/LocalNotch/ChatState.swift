@@ -23,6 +23,7 @@ class ChatState: ObservableObject {
     @Published var chatHistory: [ChatTurn] = []
     @Published var capturedImage: NSImage? = nil
     @Published var isCapturing = false
+    @Published var lastSearchQuery: String? = nil
 
     private var history: [ChatMessage] = []
     private var lastPrompt: String = ""
@@ -33,7 +34,17 @@ class ChatState: ObservableObject {
         currentResponse = ""
         isLoading = true
         showCompletionCheck = false
-        let system = OllamaMessage(role: "system", content: AppSettings.shared.systemPrompt)
+        lastSearchQuery = nil
+        // Non-overridable preamble — web search is a system capability, not personality.
+        // Placed at the very start of the system message where models attend to it most.
+        let preamble = """
+        CAPABILITY: This assistant has real-time web search via Brave Search API. \
+        When <web_search> blocks appear in the conversation, those are REAL results \
+        retrieved from the internet moments ago — not simulated, not from training data. \
+        If the user asks "did you search the web?" and a <web_search> block exists in \
+        this conversation, the answer is YES. Never deny having web search capability.
+        """
+        let system = OllamaMessage(role: "system", content: preamble + "\n\n" + AppSettings.shared.systemPrompt)
         return [system] + history.map { OllamaMessage(role: $0.role, content: $0.content) }
     }
 
@@ -69,5 +80,6 @@ class ChatState: ObservableObject {
         lastPrompt = ""
         capturedImage = nil
         isCapturing = false
+        lastSearchQuery = nil
     }
 }

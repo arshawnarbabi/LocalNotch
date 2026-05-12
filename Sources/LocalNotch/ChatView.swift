@@ -79,8 +79,25 @@ struct ChatView: View {
                 ImageProcessingDots()
                     .transition(.opacity)
             case .responding, .erasing:
-                responseScrollView
-                    .transition(.opacity.combined(with: .scale(scale: 1.03, anchor: .top)))
+                VStack(spacing: 0) {
+                    if let query = state.lastSearchQuery, !isErasing {
+                        HStack(spacing: 4) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 9, weight: .medium))
+                            Text("Web · \(query)")
+                                .font(.system(size: 10))
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                        .foregroundColor(.white.opacity(0.35))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 14)
+                        .padding(.top, 8)
+                        .transition(.opacity)
+                    }
+                    responseScrollView
+                }
+                .transition(.opacity.combined(with: .scale(scale: 1.03, anchor: .top)))
             }
         }
         .animation(.easeInOut(duration: 0.32), value: chatPhase)
@@ -420,11 +437,21 @@ struct ChatView: View {
                     return
                 }
                 let resultBlock = searchContext ?? "No results found for this query."
-                // Prefix the block with explicit instructions so the model knows these are real results.
-                let augmented = text + "\n\n[Live web search performed for '\(query)'. Results are real, current data from the internet — not from training data. Use them to answer. If asked whether a web search was done, say yes.\n\n\(resultBlock)]"
+                let augmented = text + """
+
+<web_search>
+<query>\(query)</query>
+<source>Brave Search API — live internet retrieval</source>
+<instruction>These are REAL results from the internet. Use them to answer. \
+If asked whether a web search was performed, say YES.</instruction>
+<results>
+\(resultBlock)
+</results>
+</web_search>
+"""
                 messages = await MainActor.run {
                     let msgs = state.prepareForSend(text)
-                    // Sync history with the augmented version so follow-up turns have context.
+                    state.lastSearchQuery = query
                     state.updateLastUserContent(augmented)
                     return msgs
                 }

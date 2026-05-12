@@ -475,27 +475,45 @@ struct ChatView: View {
 
     // MARK: - Search decision (hybrid: explicit → keywords → LLM classifier)
 
-    /// Layer 1: explicit user triggers like "search up X" or "look this up".
+    /// Layer 1: explicit user intent to search — "surf the web on X", "look up X", etc.
+    /// Ordered longest-first so more specific phrases match before their shorter prefixes.
     private func extractExplicitSearchQuery(from text: String) -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
         let lower = trimmed.lowercased()
 
-        let explicitTriggers = [
-            "search the web for ", "search the web ", "search up ",
-            "search for ", "look up "
+        let prefixTriggers = [
+            // Surf the web
+            "surf the web for ", "surf the web on ", "surf the web about ", "surf the web ",
+            // Search the web / internet / online
+            "search the web for ", "search the web on ", "search the web about ", "search the web ",
+            "search the internet for ", "search the internet on ", "search the internet about ", "search the internet ",
+            "search online for ", "search online on ", "search online about ", "search online ",
+            // Web search
+            "web search for ", "web search ",
+            // Search up / for
+            "search up ", "search for ",
+            // Look up / online
+            "look up ", "look online for ", "look online ",
+            // Find information / find out
+            "find information on ", "find information about ",
+            "find out about ", "find out more about ",
+            // Research
+            "research ", "look into ",
         ]
-        for trigger in explicitTriggers {
+        for trigger in prefixTriggers {
             if let range = lower.range(of: trigger) {
                 let query = String(trimmed[range.upperBound...]).trimmingCharacters(in: .whitespaces)
                 if !query.isEmpty { return query }
             }
         }
 
-        let contextual = [
-            "search this up", "search that up", "search this", "search that",
-            "look this up", "look that up"
+        // Contextual: bare intent with no following object → fall back to last prompt as query.
+        let contextualPhrases = [
+            "surf the web", "search this up", "search that up", "search this", "search that",
+            "look this up", "look that up", "google it", "google this", "google that",
+            "find this", "look it up"
         ]
-        if contextual.contains(where: { lower.contains($0) }) {
+        if contextualPhrases.contains(where: { lower.contains($0) }) {
             return state.chatHistory.last?.prompt
         }
 
@@ -548,27 +566,31 @@ struct ChatView: View {
     private func classifySearchNeed(from text: String) async -> String? {
         let today = Date().formatted(.dateTime.year().month().day())
         let prompt = """
-        Decide if this question needs current real-time information from the web.
+        Decide if this message needs a web search.
 
         Today is \(today).
 
-        SEARCH when the question is about:
+        ALWAYS SEARCH when the user:
+        - uses words like "search", "look up", "find", "surf the web", "google", "research", or any phrase implying they want information retrieved from the internet
+        - asks about a specific named product, game, movie, show, app, or person and wants current details
+        - asks about recent releases, updates, reviews, or announcements for something specific
+
+        ALSO SEARCH when the topic requires current or frequently-changing information:
         - current events, today's news
-        - current weather or forecast
-        - sports scores, schedules
-        - current prices (stocks, crypto, products)
-        - recent releases or announcements
-        - anything "now", "currently", "today"
-        - things that change frequently
+        - weather or forecast
+        - sports scores, schedules, standings
+        - stock prices, crypto prices, exchange rates
+        - trending topics
+        - anything described as "now", "currently", "today", "latest", "recent"
 
         NO SEARCH when about:
-        - definitions, vocabulary
-        - math, programming, algorithms
-        - established history
+        - definitions, vocabulary, grammar
+        - math, programming, algorithms, logic
+        - well-established history (before 2023)
         - science fundamentals
-        - how-to instructions
-        - creative writing
-        - general conversation
+        - how-to instructions for common tasks
+        - creative writing, brainstorming, opinions
+        - general casual conversation
 
         When uncertain, prefer SEARCH.
 
@@ -578,7 +600,7 @@ struct ChatView: View {
 
         Add no other text.
 
-        Question: \(text)
+        Message: \(text)
         """
 
         let messages = [OllamaMessage(role: "user", content: prompt)]

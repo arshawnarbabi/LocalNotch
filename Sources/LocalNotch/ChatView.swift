@@ -73,27 +73,20 @@ struct ChatView: View {
                 WelcomeView()
                     .transition(.opacity)
             case .searching:
-                Color.clear
-                    .transition(.opacity)
+                VStack(spacing: 0) {
+                    if let query = state.lastSearchQuery {
+                        searchBadge(query: query, searching: true)
+                    }
+                    Spacer()
+                }
+                .transition(.opacity)
             case .processingImage:
                 ImageProcessingDots()
                     .transition(.opacity)
             case .responding, .erasing:
                 VStack(spacing: 0) {
                     if let query = state.lastSearchQuery, !isErasing {
-                        HStack(spacing: 4) {
-                            Image(systemName: "magnifyingglass")
-                                .font(.system(size: 9, weight: .medium))
-                            Text("Web · \(query)")
-                                .font(.system(size: 10))
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                        }
-                        .foregroundColor(.white.opacity(0.35))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 14)
-                        .padding(.top, 8)
-                        .transition(.opacity)
+                        searchBadge(query: query, searching: false)
                     }
                     responseScrollView
                 }
@@ -134,6 +127,36 @@ struct ChatView: View {
         } else {
             AssistantRow(content: state.currentResponse)
         }
+    }
+
+    /// Visible indicator that a web search was performed. Shown during search
+    /// (with a pulsing dot) and while the response is displayed (with the query).
+    @ViewBuilder
+    private func searchBadge(query: String, searching: Bool) -> some View {
+        HStack(spacing: 5) {
+            if searching {
+                PulsingSearchDot()
+            } else {
+                Image(systemName: "globe")
+                    .font(.system(size: 10, weight: .semibold))
+            }
+            Text(searching ? "Searching the web · \(query)" : "Web · \(query)")
+                .font(.system(size: 11, weight: .medium))
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+        .foregroundColor(.white.opacity(0.85))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(
+            Capsule()
+                .fill(Color.white.opacity(0.10))
+                .overlay(Capsule().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
+        )
+        .padding(.horizontal, 12)
+        .padding(.top, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .leading)))
     }
 
     // MARK: - Input area
@@ -405,6 +428,7 @@ struct ChatView: View {
 
         inputText = ""
         state.capturedImage = nil
+        state.lastSearchQuery = nil   // clear previous badge before new turn
         withAnimation(springAnim) { isInputExpanded = false }
         inputFocused = false
         let model = imageBase64 != nil ? OllamaAPI.visionModel : OllamaAPI.textModel
@@ -429,7 +453,10 @@ struct ChatView: View {
             }
 
             if let query = query {
-                await MainActor.run { state.isSearching = true }
+                await MainActor.run {
+                    state.isSearching = true
+                    state.lastSearchQuery = query   // set immediately so badge shows during search
+                }
                 let searchContext = await BraveSearchService.shared.search(query)
                 await MainActor.run { state.isSearching = false }
                 guard !Task.isCancelled else {
@@ -451,7 +478,6 @@ If asked whether a web search was performed, say YES.</instruction>
 """
                 messages = await MainActor.run {
                     let msgs = state.prepareForSend(text)
-                    state.lastSearchQuery = query
                     state.updateLastUserContent(augmented)
                     return msgs
                 }
@@ -790,6 +816,26 @@ struct WelcomeView: View {
         }
         .animation(.easeIn(duration: 0.5), value: weather.data != nil)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - Pulsing Search Dot
+// Small animated dot shown inside the search badge while a web search is in flight.
+
+struct PulsingSearchDot: View {
+    @State private var pulse = false
+
+    var body: some View {
+        Circle()
+            .fill(Color.white)
+            .frame(width: 6, height: 6)
+            .scaleEffect(pulse ? 1.0 : 0.55)
+            .opacity(pulse ? 1.0 : 0.5)
+            .animation(
+                Animation.easeInOut(duration: 0.6).repeatForever(autoreverses: true),
+                value: pulse
+            )
+            .onAppear { pulse = true }
     }
 }
 

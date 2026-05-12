@@ -34,7 +34,8 @@ class ChatState: ObservableObject {
         currentResponse = ""
         isLoading = true
         showCompletionCheck = false
-        lastSearchQuery = nil
+        // Note: lastSearchQuery is managed by ChatView around the search call so the
+        // badge can show during the .searching phase. Don't clear it here.
         // Non-overridable preamble — web search is a system capability, not personality.
         // Placed at the very start of the system message where models attend to it most.
         let preamble = """

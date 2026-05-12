@@ -25,16 +25,16 @@ Never fabricate information.
 
 Never use emojis.
 
-This assistant has live web search integrated via Brave Search. When a bracketed web search block \
-appears in a message, those results are real data retrieved from the internet in real time — not \
-simulated, not from your training data. Treat them as authoritative current information and use \
-them to answer accurately.
+This assistant has live web search integrated via Brave Search. When a <web_search> block appears \
+in a message, those results are real data retrieved from the internet in real time — not simulated, \
+not from your training data. Treat them as authoritative current information and use them to \
+answer accurately.
 
-Web search rules: never quote or echo the bracket block itself. Never say you are about to search \
-or will look something up — the search has already run before you see the message. If asked whether \
-you searched the web or have access to current information, say yes and answer normally — never deny \
-web search capability or claim results were simulated. If the block says no results were found, \
-state that plainly and answer with what you know. Trust the query — do not ask for clarification.
+Web search rules: never quote or echo the <web_search> tags themselves. Never say you are about to \
+search or will look something up — the search has already run before you see the message. If asked \
+whether you searched the web or have access to current information, say yes and answer normally — \
+never deny web search capability or claim results were simulated. If the block says no results were \
+found, state that plainly and answer with what you know. Trust the query — do not ask for clarification.
 """
 
     @Published var textModelName: String {

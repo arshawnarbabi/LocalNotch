@@ -2,6 +2,7 @@ import SwiftUI
 import MarkdownUI
 import ImageIO
 import CoreGraphics
+import ScreenCaptureKit
 
 struct ChatView: View {
     @ObservedObject var state: ChatState
@@ -699,12 +700,8 @@ If asked whether a web search was performed, say YES.</instruction>
     }
 
     private func captureScreen() {
-        // CGWindowListCreateImage keys its TCC permission to the bundle ID, not the
-        // code signature — so ad-hoc re-signed builds don't lose the grant each time.
         guard CGPreflightScreenCaptureAccess() else {
             CGRequestScreenCaptureAccess()
-            // TCC changes don't apply to the running process. Show a message so the
-            // user knows to relaunch — without this they get the popup on every press.
             state.currentResponse = "**Screen Recording permission required.**\n\nGrant access in the System Settings window that just opened, then **quit and relaunch LocalNotch** (⌘Q from the menu bar). The change won't take effect in the current session."
             state.isLoading = false
             state.showCompletionCheck = false
@@ -713,35 +710,44 @@ If asked whether a web search was performed, say YES.</instruction>
 
         state.isCapturing = true
 
-        // Attempt 1: exclude our notch panel so it doesn't appear in the screenshot.
-        // Find the lowest window number at screenSaver level — that's our panel.
-        // On macOS 15+ this can return nil if the window isn't compositable; we fall
-        // back rather than silently failing.
-        let topWindowID = NSApp.windows
-            .filter { $0.level.rawValue >= NSWindow.Level.screenSaver.rawValue }
-            .compactMap { $0.windowNumber > 0 ? CGWindowID($0.windowNumber) : nil }
-            .min()
+        // CGWindowListCreateImage was obsoleted in macOS 15 and returns nil on macOS 15+.
+        // Use ScreenCaptureKit (SCScreenshotManager) as the sole capture path.
+        Task { @MainActor in
+            do {
+                let content = try await SCShareableContent.current
+                guard let display = content.displays.first else {
+                    state.isCapturing = false
+                    return
+                }
 
-        var cgImage: CGImage?
-        if let wid = topWindowID {
-            cgImage = CGWindowListCreateImage(.infinite, .optionOnScreenBelowWindow, wid, .bestResolution)
+                // Exclude our own app so the notch panel doesn't appear in the screenshot.
+                let ourApp = content.applications.first { $0.bundleIdentifier == "com.localnotch" }
+                let filter: SCContentFilter
+                if let app = ourApp {
+                    filter = SCContentFilter(display: display, excludingApplications: [app], exceptingWindows: [])
+                } else {
+                    filter = SCContentFilter(display: display, excludingWindows: [])
+                }
+
+                let config = SCStreamConfiguration()
+                if let screen = NSScreen.main {
+                    let scale = screen.backingScaleFactor
+                    config.width = Int(screen.frame.width * scale)
+                    config.height = Int(screen.frame.height * scale)
+                }
+                config.captureResolution = .best
+                config.showsCursor = false
+
+                let cgImage = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
+                state.isCapturing = false
+                state.capturedImage = NSImage(cgImage: cgImage, size: .zero)
+                flashScreen()
+            } catch {
+                state.isCapturing = false
+                state.currentResponse = "Screenshot failed.\n\nMake sure Screen Recording is enabled in **System Settings → Privacy & Security → Screen Recording**, then relaunch LocalNotch.\n\nError: \(error.localizedDescription)"
+                state.isLoading = false
+            }
         }
-
-        // Attempt 2: full-screen capture (notch panel may appear; still useful).
-        if cgImage == nil {
-            cgImage = CGWindowListCreateImage(.infinite, .optionAll, kCGNullWindowID, .bestResolution)
-        }
-
-        state.isCapturing = false
-
-        guard let cgImage else {
-            state.currentResponse = "Screenshot failed. Make sure Screen Recording is enabled in **System Settings → Privacy & Security → Screen Recording**, then relaunch LocalNotch."
-            state.isLoading = false
-            return
-        }
-
-        state.capturedImage = NSImage(cgImage: cgImage, size: NSZeroSize)
-        flashScreen()
     }
 
     @MainActor

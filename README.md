@@ -4,7 +4,7 @@
 
 LocalNotch is a macOS AI assistant that lives in your MacBook's notch. Hover to open, type to ask anything — then it disappears. No window to manage, no app to switch to. Everything runs locally through [Ollama](https://ollama.com): your conversations, your screenshots, your data — nothing leaves your machine. Optionally wire in a Brave Search API key and it gains real-time web search, decided automatically by a 3-layer classifier.
 
-> **Beta (v0.1.0)** — Apple Silicon only. See [Known Limitations](#known-limitations) before installing.
+> **This is beta software.** LocalNotch is v0.1.0 and actively developed. You may encounter bugs, rough edges, and missing features. Apple Silicon only. See [Known Limitations](#known-limitations) before installing.
 
 ---
 
@@ -361,7 +361,7 @@ These are documented accepted limitations for the v0.1.0 beta.
 
 | Limitation | Notes |
 |---|---|
-| **No full-screen Space support** | Input doesn't reliably receive click events when another app is in a macOS full-screen Space. Workaround: leave full-screen before using LocalNotch. Root cause: DynamicNotchKit NSPanel vs. full-screen Space interaction. |
+| **No full-screen Space support** | Input doesn't reliably receive click events when another app is in a macOS full-screen Space, and screenshots taken while a full-screen app is active may not capture correctly. Workaround: leave full-screen mode before using LocalNotch. This may be fixed in a future release. |
 | **Text and image input only** | No voice, audio, file, or PDF attachments. Image input is via the in-app screenshot button only. |
 | **Single-display capture** | The screenshot button captures only the main display. |
 | **No conversation persistence** | Chat history lives in memory. Quitting the app loses it. |

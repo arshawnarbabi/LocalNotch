@@ -144,7 +144,8 @@ struct SettingsRowButton: View {
 
 struct ModelsSettingsView: View {
     @ObservedObject private var settings = AppSettings.shared
-    @State private var availableModels: [String] = []
+    @State private var textModels: [String] = []
+    @State private var visionModels: [String] = []
     @State private var ollamaStatus: OllamaStatus = .loading
     @State private var textOpen = false
     @State private var visionOpen = false
@@ -160,7 +161,7 @@ struct ModelsSettingsView: View {
                     ModelDropdownRow(
                         label: "Text model",
                         selected: settings.textModelName,
-                        models: availableModels,
+                        models: textModels,
                         isLoading: ollamaStatus == .loading,
                         isOpen: $textOpen,
                         onSelect: {
@@ -173,7 +174,7 @@ struct ModelsSettingsView: View {
                     ModelDropdownRow(
                         label: "Vision model",
                         selected: settings.visionModelName,
-                        models: availableModels,
+                        models: visionModels,
                         isLoading: ollamaStatus == .loading,
                         isOpen: $visionOpen,
                         onSelect: {
@@ -189,10 +190,9 @@ struct ModelsSettingsView: View {
 
                     Group {
                         switch ollamaStatus {
-                        case .loading:    Text("Connecting to Ollama…")
+                        case .loading:     Text("Connecting to Ollama…")
                         case .unreachable: Text("Ollama not reachable")
-                        case .ok:
-                            Text("\(availableModels.count) model\(availableModels.count == 1 ? "" : "s") found")
+                        case .ok:          Text("\(textModels.count) text · \(visionModels.count) vision")
                         }
                     }
                     .font(.system(size: 11))
@@ -247,7 +247,10 @@ struct ModelsSettingsView: View {
                 ollamaStatus = .unreachable; return
             }
             let decoded = try JSONDecoder().decode(OllamaTagsResponse.self, from: data)
-            availableModels = decoded.models.map(\.name).sorted()
+            let all = decoded.models
+            let tv = all.filter { !$0.isVisionCapable }.map(\.name).sorted()
+            textModels = tv.isEmpty ? all.map(\.name).sorted() : tv
+            visionModels = all.filter { $0.isVisionCapable }.map(\.name).sorted()
             ollamaStatus = .ok
         } catch {
             ollamaStatus = .unreachable

@@ -30,7 +30,26 @@ private struct OllamaChatChunk: Codable {
 }
 
 struct OllamaTagsResponse: Decodable {
-    struct Model: Decodable { let name: String }
+    struct Model: Decodable {
+        let name: String
+        let details: Details?
+
+        struct Details: Decodable {
+            let family: String?
+            let families: [String]?
+        }
+
+        // Vision models carry "clip" (CLIP encoder) or "mllama" (Llama 3.2 Vision)
+        // in their families list. Name heuristics cover any stragglers.
+        var isVisionCapable: Bool {
+            let visionFamilies: Set<String> = ["clip", "mllama", "moondream1", "moondream2"]
+            let allFamilies = (details?.families ?? []) + [details?.family].compactMap { $0 }
+            if allFamilies.contains(where: { visionFamilies.contains($0.lowercased()) }) { return true }
+            let n = name.lowercased()
+            return n.contains("vision") || n.contains("llava") || n.contains("moondream")
+                || n.contains("minicpm-v") || n.contains("-vl") || n.contains(":vl")
+        }
+    }
     let models: [Model]
 }
 

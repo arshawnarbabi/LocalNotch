@@ -274,7 +274,9 @@ private struct PickTextModelStep: View {
         do {
             let (data, _) = try await OllamaAPI.statusSession.data(from: url)
             let decoded = try JSONDecoder().decode(OllamaTagsResponse.self, from: data)
-            availableModels = decoded.models.map(\.name).sorted()
+            let textOnly = decoded.models.filter { !$0.isVisionCapable }.map(\.name).sorted()
+            // Fall back to all models if nothing qualifies as text-only
+            availableModels = textOnly.isEmpty ? decoded.models.map(\.name).sorted() : textOnly
         } catch {}
         loading = false
     }
@@ -337,7 +339,8 @@ private struct PickVisionModelStep: View {
         do {
             let (data, _) = try await OllamaAPI.statusSession.data(from: url)
             let decoded = try JSONDecoder().decode(OllamaTagsResponse.self, from: data)
-            availableModels = decoded.models.map(\.name).sorted()
+            // Only show vision-capable models; empty list is valid (user has none installed)
+            availableModels = decoded.models.filter { $0.isVisionCapable }.map(\.name).sorted()
         } catch {}
         loading = false
     }

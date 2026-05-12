@@ -54,6 +54,7 @@ enough and answer with whatever information is available.
     @Published var onboardingStep: Int {
         didSet { UserDefaults.standard.set(onboardingStep, forKey: "onboardingStep") }
     }
+    @Published var notchContentHeight: CGFloat = 300
 
     private init() {
         textModelName    = UserDefaults.standard.string(forKey: "textModelName") ?? ""

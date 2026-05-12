@@ -15,6 +15,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        setupMainMenu()
         setupNotch()
         setupStatusItem()
         if !AppSettings.shared.onboardingComplete {
@@ -32,11 +33,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             hoverBehavior: [.keepVisible, .increaseShadow],
             style: .notch(topCornerRadius: 15, bottomCornerRadius: 38)
         ) {
-            AnyView(
-                ChatView(state: state)
-                    .frame(width: 420, height: 300)
-                    .background(Color.black)
-            )
+            AnyView(NotchContentView(state: state))
         } compactLeading: {
             AnyView(EmptyView())
         } compactTrailing: {
@@ -80,6 +77,30 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
     }
 
+    private func setupMainMenu() {
+        let mainMenu = NSMenu()
+
+        let appItem = NSMenuItem()
+        let appMenu = NSMenu()
+        appMenu.addItem(NSMenuItem(title: "Quit LocalNotch", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        appItem.submenu = appMenu
+        mainMenu.addItem(appItem)
+
+        let editItem = NSMenuItem()
+        let editMenu = NSMenu(title: "Edit")
+        editMenu.addItem(NSMenuItem(title: "Undo", action: Selector(("undo:")), keyEquivalent: "z"))
+        editMenu.addItem(NSMenuItem(title: "Redo", action: Selector(("redo:")), keyEquivalent: "Z"))
+        editMenu.addItem(.separator())
+        editMenu.addItem(NSMenuItem(title: "Cut",        action: #selector(NSText.cut(_:)),       keyEquivalent: "x"))
+        editMenu.addItem(NSMenuItem(title: "Copy",       action: #selector(NSText.copy(_:)),      keyEquivalent: "c"))
+        editMenu.addItem(NSMenuItem(title: "Paste",      action: #selector(NSText.paste(_:)),     keyEquivalent: "v"))
+        editMenu.addItem(NSMenuItem(title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
+        editItem.submenu = editMenu
+        mainMenu.addItem(editItem)
+
+        NSApp.mainMenu = mainMenu
+    }
+
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = statusItem?.button {
@@ -115,6 +136,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func quitApp() {
         NSApp.terminate(nil)
+    }
+}
+
+// Reactive wrapper so the panel height can animate when dropdowns open in onboarding.
+private struct NotchContentView: View {
+    let state: ChatState
+    @ObservedObject private var settings = AppSettings.shared
+
+    var body: some View {
+        ChatView(state: state)
+            .frame(width: 420, height: settings.notchContentHeight)
+            .background(Color.black)
     }
 }
 

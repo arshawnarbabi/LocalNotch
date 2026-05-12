@@ -204,6 +204,12 @@ struct ModelsSettingsView: View {
         }
         .scrollIndicators(.hidden)
         .task { await loadModels() }
+        .onChange(of: textOpen) { _, open in
+            if open { withAnimation(.easeInOut(duration: 0.12)) { visionOpen = false } }
+        }
+        .onChange(of: visionOpen) { _, open in
+            if open { withAnimation(.easeInOut(duration: 0.12)) { textOpen = false } }
+        }
     }
 
     private var unreachableView: some View {
@@ -267,6 +273,7 @@ struct ModelDropdownRow: View {
     let isLoading: Bool
     @Binding var isOpen: Bool
     let onSelect: (String) -> Void
+    var recommended: String? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -305,17 +312,18 @@ struct ModelDropdownRow: View {
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
                     } else {
-                        ScrollView {
-                            VStack(spacing: 3) {
-                                ForEach(models, id: \.self) { model in
-                                    ModelOptionRow(name: model, isSelected: model == selected) {
-                                        onSelect(model)
-                                    }
+                        VStack(spacing: 3) {
+                            ForEach(models, id: \.self) { model in
+                                ModelOptionRow(
+                                    name: model,
+                                    isSelected: model == selected,
+                                    isRecommended: recommended == model
+                                ) {
+                                    onSelect(model)
                                 }
                             }
-                            .padding(6)
                         }
-                        .frame(maxHeight: 140)
+                        .padding(6)
                     }
                 }
                 .background(
@@ -332,6 +340,7 @@ struct ModelDropdownRow: View {
 struct ModelOptionRow: View {
     let name: String
     let isSelected: Bool
+    var isRecommended: Bool = false
     let action: () -> Void
     @State private var hovering = false
 
@@ -342,6 +351,14 @@ struct ModelOptionRow: View {
                 .foregroundColor(.white)
                 .lineLimit(1)
                 .truncationMode(.middle)
+            if isRecommended {
+                Text("Recommended")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(.white.opacity(0.55))
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(Color.white.opacity(0.10)))
+            }
             Spacer()
             if isSelected {
                 Image(systemName: "checkmark")

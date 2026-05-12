@@ -2,8 +2,8 @@ import SwiftUI
 import AppKit
 
 // MARK: - Onboarding View
-// 5-step in-panel flow. Shown on first launch until onboardingComplete is set.
-// Steps: 1 Ollama check → 2 Text model → 3 Vision model → 4 Brave key → 5 Done
+// 6-step in-panel flow. Shown on first launch until onboardingComplete is set.
+// Steps: 1 Ollama check → 2 Your name → 3 Text model → 4 Vision model → 5 Brave key → 6 Done
 // No skip/dismiss — user must complete all steps.
 // Current step persists to UserDefaults so quitting mid-flow resumes in place.
 
@@ -11,7 +11,7 @@ struct OnboardingView: View {
     @ObservedObject private var settings = AppSettings.shared
     @State private var step: Int = AppSettings.shared.onboardingStep
 
-    private let totalSteps = 5
+    private let totalSteps = 6
     private let stepSpring = Animation.easeInOut(duration: 0.32)
 
     var body: some View {
@@ -52,24 +52,29 @@ struct OnboardingView: View {
                 .transition(stepTransition)
                 .id("step1")
         case 2:
-            PickTextModelStep(onNext: advance)
+            YourNameStep(onNext: advance)
                 .transition(stepTransition)
                 .id("step2")
         case 3:
-            PickVisionModelStep(onNext: advance)
+            PickTextModelStep(onNext: advance)
                 .transition(stepTransition)
                 .id("step3")
         case 4:
-            BraveKeyStep(onNext: advance)
+            PickVisionModelStep(onNext: advance)
                 .transition(stepTransition)
                 .id("step4")
         case 5:
+            BraveKeyStep(onNext: advance)
+                .transition(stepTransition)
+                .id("step5")
+        case 6:
             DoneStep(onFinish: {
+                AppSettings.shared.notchContentHeight = 300
                 AppSettings.shared.onboardingStep = 1
                 AppSettings.shared.onboardingComplete = true
             })
             .transition(stepTransition)
-            .id("step5")
+            .id("step6")
         default:
             EmptyView()
         }
@@ -83,6 +88,7 @@ struct OnboardingView: View {
     }
 
     private func advance() {
+        AppSettings.shared.notchContentHeight = 300
         let next = min(step + 1, totalSteps)
         AppSettings.shared.onboardingStep = next
         withAnimation(stepSpring) { step = next }
@@ -232,8 +238,6 @@ private struct PickTextModelStep: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            Spacer()
-
             VStack(spacing: 6) {
                 Text("Choose a text model")
                     .font(.system(size: 18, weight: .medium))
@@ -264,9 +268,17 @@ private struct PickTextModelStep: View {
                 disabled: !canContinue
             ) { onNext() }
 
-            Spacer()
+            Spacer(minLength: 0)
         }
+        .padding(.top, 56)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .task { await loadModels() }
+        .onChange(of: isOpen) { _, open in
+            let listH = CGFloat(max(1, availableModels.count)) * 33 + 20
+            withAnimation(.spring(response: 0.45, dampingFraction: open ? 0.68 : 0.82)) {
+                AppSettings.shared.notchContentHeight = open ? max(300, 250 + listH) : 300
+            }
+        }
     }
 
     private func loadModels() async {
@@ -274,9 +286,7 @@ private struct PickTextModelStep: View {
         do {
             let (data, _) = try await OllamaAPI.statusSession.data(from: url)
             let decoded = try JSONDecoder().decode(OllamaTagsResponse.self, from: data)
-            let textOnly = decoded.models.filter { !$0.isVisionCapable }.map(\.name).sorted()
-            // Fall back to all models if nothing qualifies as text-only
-            availableModels = textOnly.isEmpty ? decoded.models.map(\.name).sorted() : textOnly
+            availableModels = decoded.models.map(\.name).sorted()
         } catch {}
         loading = false
     }
@@ -288,49 +298,95 @@ private struct PickVisionModelStep: View {
     let onNext: () -> Void
 
     @ObservedObject private var settings = AppSettings.shared
-    @State private var availableModels: [String] = []
+    @State private var availableModels: [OllamaTagsResponse.Model] = []
     @State private var loading = true
     @State private var isOpen = false
+    @State private var textModelIsMultimodal = false
+
+    private var modelNames: [String] { availableModels.map(\.name) }
+
+    private var recommendedModel: String? {
+        availableModels.sorted { rankScore($0) > rankScore($1) }.first?.name
+    }
+
+    private func rankScore(_ model: OllamaTagsResponse.Model) -> Int {
+        let families = ((model.details?.families ?? []) + [model.details?.family].compactMap { $0 })
+            .map { $0.lowercased() }
+        if families.contains("mllama") { return 2 }
+        if families.contains("clip")   { return 1 }
+        return 0
+    }
 
     var body: some View {
-        VStack(spacing: 16) {
-            Spacer()
-
-            VStack(spacing: 6) {
-                Text("Vision model")
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundColor(.white)
-                Text("Optional — enables screenshot analysis.\nYou can add one later in Settings.")
-                    .font(.system(size: 12))
-                    .foregroundColor(.white.opacity(0.5))
-                    .multilineTextAlignment(.center)
-            }
-            .padding(.horizontal, 24)
-
-            ModelDropdownRow(
-                label: "Vision model (optional)",
-                selected: settings.visionModelName,
-                models: availableModels,
-                isLoading: loading,
-                isOpen: $isOpen,
-                onSelect: {
-                    settings.visionModelName = $0
-                    withAnimation(.easeInOut(duration: 0.12)) { isOpen = false }
+        Group {
+            if loading {
+                Color.clear
+            } else if textModelIsMultimodal {
+                VStack(spacing: 14) {
+                    Spacer()
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 28))
+                        .foregroundColor(.green)
+                    Text("Vision included")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundColor(.white)
+                    Text("\(settings.textModelName) supports images natively.\nNo separate model needed.")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.5))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+                    Spacer()
                 }
-            )
-            .padding(.horizontal, 24)
+                .transition(.opacity)
+            } else {
+                VStack(spacing: 16) {
+                    VStack(spacing: 6) {
+                        Text("Vision model")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundColor(.white)
+                        Text("Optional — enables screenshot analysis.\nYou can add one later in Settings.")
+                            .font(.system(size: 12))
+                            .foregroundColor(.white.opacity(0.5))
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(.horizontal, 24)
 
-            HStack(spacing: 12) {
-                OnboardingButton(label: "Skip", icon: "arrow.right") { onNext() }
-                if !settings.visionModelName.isEmpty {
-                    OnboardingButton(label: "Continue", icon: "checkmark") { onNext() }
-                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                    ModelDropdownRow(
+                        label: "Vision model (optional)",
+                        selected: settings.visionModelName,
+                        models: modelNames,
+                        isLoading: false,
+                        isOpen: $isOpen,
+                        onSelect: {
+                            settings.visionModelName = $0
+                            withAnimation(.easeInOut(duration: 0.12)) { isOpen = false }
+                        },
+                        recommended: recommendedModel
+                    )
+                    .padding(.horizontal, 24)
+
+                    HStack(spacing: 12) {
+                        OnboardingButton(label: "Skip", icon: "arrow.right") { onNext() }
+                        if !settings.visionModelName.isEmpty {
+                            OnboardingButton(label: "Continue", icon: "checkmark") { onNext() }
+                                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                        }
+                    }
+                    .animation(.spring(response: 0.28, dampingFraction: 0.72), value: settings.visionModelName.isEmpty)
+
+                    Spacer(minLength: 0)
+                }
+                .padding(.top, 46)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .onChange(of: isOpen) { _, open in
+                    let listH = CGFloat(max(1, availableModels.count)) * 33 + 20
+                    withAnimation(.spring(response: 0.45, dampingFraction: open ? 0.68 : 0.82)) {
+                        AppSettings.shared.notchContentHeight = open ? max(300, 250 + listH) : 300
+                    }
                 }
             }
-            .animation(.spring(response: 0.28, dampingFraction: 0.72), value: settings.visionModelName.isEmpty)
-
-            Spacer()
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task { await loadModels() }
     }
 
@@ -339,8 +395,22 @@ private struct PickVisionModelStep: View {
         do {
             let (data, _) = try await OllamaAPI.statusSession.data(from: url)
             let decoded = try JSONDecoder().decode(OllamaTagsResponse.self, from: data)
-            // Only show vision-capable models; empty list is valid (user has none installed)
-            availableModels = decoded.models.filter { $0.isVisionCapable }.map(\.name).sorted()
+
+            let selectedText = settings.textModelName
+            if let textModel = decoded.models.first(where: { $0.name == selectedText }),
+               textModel.isVisionCapable {
+                settings.visionModelName = selectedText
+                withAnimation(.spring(response: 0.38, dampingFraction: 0.75)) {
+                    textModelIsMultimodal = true
+                    loading = false
+                }
+                try? await Task.sleep(for: .milliseconds(1400))
+                onNext()
+                return
+            }
+
+            availableModels = decoded.models.filter { $0.isVisionCapable }
+                .sorted { rankScore($0) > rankScore($1) }
         } catch {}
         loading = false
     }
@@ -366,6 +436,21 @@ private struct BraveKeyStep: View {
                     .font(.system(size: 12))
                     .foregroundColor(.white.opacity(0.5))
                     .multilineTextAlignment(.center)
+
+                HStack(spacing: 4) {
+                    Text("Free for 1,000 searches/month —")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.4))
+                    Text("get a key")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(Color(red: 0.4, green: 0.7, blue: 1.0))
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(Color(red: 0.4, green: 0.7, blue: 1.0))
+                }
+                .overlay(AppKitTapHandler {
+                    NSWorkspace.shared.open(URL(string: "https://api.search.brave.com/register")!)
+                })
             }
             .padding(.horizontal, 24)
 
@@ -414,16 +499,72 @@ private struct BraveKeyStep: View {
     }
 }
 
-// MARK: - Step 5: Done
+// MARK: - Step 5: Your Name
+
+private struct YourNameStep: View {
+    let onNext: () -> Void
+    @ObservedObject private var settings = AppSettings.shared
+
+    private var canContinue: Bool {
+        !settings.displayName.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    var body: some View {
+        VStack(spacing: 16) {
+            VStack(spacing: 6) {
+                Text("What's your name?")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(.white)
+                Text("Optional — personalizes your greeting.\nYou can change this in Settings.")
+                    .font(.system(size: 12))
+                    .foregroundColor(.white.opacity(0.5))
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.horizontal, 24)
+
+            TextField("First name", text: $settings.displayName)
+                .textFieldStyle(.plain)
+                .font(.system(size: 14))
+                .foregroundColor(.white)
+                .tint(.white)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .modifier(GlassPillModifier())
+                .padding(.horizontal, 24)
+
+            HStack(spacing: 12) {
+                OnboardingButton(label: "Skip", icon: "arrow.right") { onNext() }
+                if canContinue {
+                    OnboardingButton(label: "Continue", icon: "checkmark") { onNext() }
+                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                }
+            }
+            .animation(.spring(response: 0.28, dampingFraction: 0.72), value: canContinue)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.top, 56)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+}
+
+// MARK: - Step 6: Done
 
 private struct DoneStep: View {
     let onFinish: () -> Void
+    @ObservedObject private var settings = AppSettings.shared
+
+    private var doneTitle: String {
+        let name = settings.displayName.trimmingCharacters(in: .whitespaces)
+        return name.isEmpty ? "You're all set." : "You're all set, \(name)."
+    }
 
     var body: some View {
         VStack(spacing: 14) {
             Spacer()
 
-            Text("You're all set.")
+            Text(doneTitle)
                 .font(.system(size: 22, weight: .medium))
                 .foregroundColor(.white)
 

@@ -39,8 +39,10 @@ struct OllamaTagsResponse: Decodable {
             let families: [String]?
         }
 
-        // Vision models carry "clip" (CLIP encoder) or "mllama" (Llama 3.2 Vision)
-        // in their families list. Name heuristics cover any stragglers.
+        // Vision-capable models carry a vision encoder family in Ollama's metadata:
+        // "clip" (CLIP encoder, used by LLaVA etc.), "mllama" (Llama 3.2 Vision),
+        // "moondream1/2". Base model families like "gemma4" are NOT included —
+        // the edge/text-only variants share the same family name as multimodal ones.
         var isVisionCapable: Bool {
             let visionFamilies: Set<String> = ["clip", "mllama", "moondream1", "moondream2"]
             let allFamilies = (details?.families ?? []) + [details?.family].compactMap { $0 }

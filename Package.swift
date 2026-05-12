@@ -14,9 +14,6 @@ let package = Package(
             dependencies: [
                 .product(name: "DynamicNotchKit", package: "DynamicNotchKit"),
                 .product(name: "MarkdownUI", package: "swift-markdown-ui"),
-            ],
-            linkerSettings: [
-                .linkedFramework("ScreenCaptureKit"),
             ]
         )
     ]

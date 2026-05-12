@@ -1,7 +1,7 @@
 import SwiftUI
 import MarkdownUI
 import ImageIO
-import ScreenCaptureKit
+import CoreGraphics
 
 struct ChatView: View {
     @ObservedObject var state: ChatState
@@ -23,7 +23,6 @@ struct ChatView: View {
     @State private var snapshotForErase = ""
     @State private var isErasing = false
     @State private var eraseProgress: Double = 0
-
 
     @FocusState private var inputFocused: Bool
     @Namespace private var pillNS
@@ -402,7 +401,6 @@ struct ChatView: View {
             }
 
             var messages: [OllamaMessage]
-            let displayText = text
 
             // Show typing dots in the compact view while we run the classifier.
             await MainActor.run { state.isLoading = true }
@@ -421,17 +419,17 @@ struct ChatView: View {
                     await MainActor.run { state.isLoading = false }
                     return
                 }
-                messages = await MainActor.run { state.prepareForSend(displayText) }
+                messages = await MainActor.run { state.prepareForSend(text) }
                 if let lastIdx = messages.lastIndex(where: { $0.role == "user" }) {
                     let resultBlock = searchContext ?? "The web search returned no results for this query."
                     messages[lastIdx] = OllamaMessage(
                         role: "user",
-                        content: displayText + "\n\n[Web search results for '\(query)':\n\(resultBlock)]",
+                        content: text + "\n\n[Web search results for '\(query)':\n\(resultBlock)]",
                         images: imageBase64.map { [$0] }
                     )
                 }
             } else {
-                messages = await MainActor.run { state.prepareForSend(displayText) }
+                messages = await MainActor.run { state.prepareForSend(text) }
                 if let imgData = imageBase64,
                    let lastIdx = messages.lastIndex(where: { $0.role == "user" }) {
                     messages[lastIdx] = OllamaMessage(
@@ -442,7 +440,10 @@ struct ChatView: View {
                 }
             }
 
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled else {
+                await MainActor.run { state.isLoading = false }
+                return
+            }
 
             // If an image is being sent, show the processing-dots indicator until
             // the first token arrives (the vision model takes notably longer).
@@ -616,37 +617,33 @@ struct ChatView: View {
     }
 
     private func captureScreen() {
-        state.isCapturing = true
-        Task {
-            do {
-                let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-                guard let display = content.displays.first else {
-                    await MainActor.run { state.isCapturing = false }
-                    return
-                }
-
-                let panelNums: Set<CGWindowID> = await MainActor.run {
-                    Set(NSApp.windows
-                        .filter { $0.level.rawValue >= NSWindow.Level.screenSaver.rawValue }
-                        .map { CGWindowID($0.windowNumber) })
-                }
-                let excluded = content.windows.filter { panelNums.contains($0.windowID) }
-
-                let filter = SCContentFilter(display: display, excludingWindows: excluded)
-                let config = SCStreamConfiguration()
-                config.width = display.width
-                config.height = display.height
-
-                let cgImage = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
-                await MainActor.run {
-                    state.isCapturing = false
-                    state.capturedImage = NSImage(cgImage: cgImage, size: NSZeroSize)
-                    flashScreen()
-                }
-            } catch {
-                await MainActor.run { state.isCapturing = false }
-            }
+        // CGWindowListCreateImage keys its TCC permission to the bundle ID, not the
+        // code signature — so ad-hoc re-signed builds don't lose the grant each time.
+        guard CGPreflightScreenCaptureAccess() else {
+            CGRequestScreenCaptureAccess()
+            return
         }
+
+        state.isCapturing = true
+
+        // Use the bottom-most elevated window (our notch panel) as the exclusion
+        // boundary — everything below it is captured, our panel is omitted.
+        let topWindowID = NSApp.windows
+            .filter { $0.level.rawValue >= NSWindow.Level.screenSaver.rawValue }
+            .compactMap { $0.windowNumber > 0 ? CGWindowID($0.windowNumber) : nil }
+            .min()
+
+        let cgImage: CGImage?
+        if let wid = topWindowID {
+            cgImage = CGWindowListCreateImage(.infinite, .optionOnScreenBelowWindow, wid, .bestResolution)
+        } else {
+            cgImage = CGWindowListCreateImage(.infinite, .optionAll, kCGNullWindowID, .bestResolution)
+        }
+
+        state.isCapturing = false
+        guard let cgImage else { return }
+        state.capturedImage = NSImage(cgImage: cgImage, size: NSZeroSize)
+        flashScreen()
     }
 
     @MainActor
@@ -697,7 +694,8 @@ struct ChatView: View {
 struct WelcomeView: View {
     @StateObject private var weather = WeatherService()
     @ObservedObject private var settings = AppSettings.shared
-    @State private var nameWidth: CGFloat = 0
+
+    private let blockWidth: CGFloat = 280
 
     private var greeting: String {
         let name = settings.displayName.trimmingCharacters(in: .whitespaces)
@@ -705,41 +703,36 @@ struct WelcomeView: View {
     }
 
     var body: some View {
-        ZStack {
-            VStack(alignment: .leading, spacing: 22) {
-                Text(greeting)
-                    .font(.system(size: 28, weight: .medium))
-                    .foregroundColor(.white)
-                    .background(
-                        GeometryReader { geo in
-                            Color.clear.onAppear { nameWidth = geo.size.width }
-                        }
-                    )
+        VStack(alignment: .center, spacing: 22) {
+            Text(greeting)
+                .font(.system(size: 28, weight: .medium))
+                .foregroundColor(.white)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
 
-                if let w = weather.data {
-                    TimelineView(.everyMinute) { ctx in
-                        HStack(alignment: .top, spacing: 0) {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("\(w.tempF)°F  ·  \(w.condition)")
-                                Text("Feels \(w.feelsLikeF)°  ·  \(w.humidity)% humidity")
-                                    .opacity(0.6)
-                            }
-                            Spacer(minLength: 8)
-                            VStack(alignment: .trailing, spacing: 3) {
-                                Text(ctx.date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
-                                Text(ctx.date.formatted(.dateTime.hour().minute()))
-                                    .opacity(0.6)
-                            }
+            if let w = weather.data {
+                TimelineView(.everyMinute) { ctx in
+                    HStack(alignment: .top, spacing: 0) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("\(w.tempF)°F  ·  \(w.condition)")
+                            Text("Feels \(w.feelsLikeF)°  ·  \(w.humidity)% humidity")
+                                .opacity(0.6)
                         }
-                        .frame(width: nameWidth > 0 ? nameWidth : nil)
+                        Spacer(minLength: 8)
+                        VStack(alignment: .trailing, spacing: 3) {
+                            Text(ctx.date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
+                            Text(ctx.date.formatted(.dateTime.hour().minute()))
+                                .opacity(0.6)
+                        }
                     }
-                    .font(.system(size: 12))
-                    .foregroundColor(.white.opacity(0.5))
-                    .transition(.opacity)
+                    .frame(width: blockWidth)
                 }
+                .font(.system(size: 12))
+                .foregroundColor(.white.opacity(0.5))
+                .transition(.opacity)
             }
-            .animation(.easeIn(duration: 0.5), value: weather.data != nil)
         }
+        .animation(.easeIn(duration: 0.5), value: weather.data != nil)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

@@ -32,7 +32,7 @@ An AI assistant that lives in your Mac's notch. Hover to open, type to ask anyth
 - **Vision** — tap the camera button to capture your screen and ask questions about it; long-press to clear the screenshot
 - **Hybrid web search** — bring your own Brave Search API key; a 3-layer classifier (explicit triggers → keyword detection → LLM) decides when to search automatically
 - **Web search badge** — a pulsing dot appears while a search is in flight; a globe badge persists while the model is responding so you always know when live data was used
-- **Weather & time** — the idle screen shows current temperature, feels-like, humidity, and condition alongside today's date and live clock; refreshes every 10 minutes via [wttr.in](https://wttr.in) — no account or API key required
+- **Weather & time** — the idle screen shows current temperature (Fahrenheit), feels-like, humidity, and condition alongside today's date and live clock; refreshes every 10 minutes via [wttr.in](https://wttr.in) — no account or API key required
 - **Personalized greeting** — set your name in onboarding or Settings and the idle screen greets you
 - **Chat history panel** — view all turns from the current session; tap any response to expand it in full
 - **In-session reset** — the counterclockwise arrow button wipes the current response with an animated fade and clears the full conversation history
@@ -155,6 +155,9 @@ A confirmation screen. Click "Let's go" to close onboarding and start using the 
 | Camera (long-press 1 second) | Camera button | Clear a previously captured screenshot; a progress ring fills while you hold |
 | ⌘, | Menu bar sparkle icon | Open Settings |
 | ⌘Q | Menu bar sparkle icon | Quit LocalNotch |
+| ⌘Z / ⌘⇧Z | Input field | Undo / Redo |
+| ⌘C / ⌘X / ⌘V | Input field | Copy / Cut / Paste |
+| ⌘A | Input field | Select all text in the input field |
 
 ### Screenshot / vision workflow
 
@@ -365,6 +368,9 @@ These are documented accepted limitations for the v0.1.0 beta.
 | **Apple Silicon only** | Intel Macs are not supported. |
 | **Localhost Ollama only** | Remote or custom-URL Ollama instances are not supported in v0.1. |
 | **API key in UserDefaults** | The Brave Search API key is stored in `UserDefaults`, not in Keychain. It is stored locally on your machine and never transmitted anywhere. |
+| **Response text is not selectable** | AI responses are rendered via MarkdownUI using SwiftUI `Text` views without `.textSelection(.enabled)`. You cannot highlight or copy text from a response in v0.1. |
+| **Reasoning tokens suppressed** | All Ollama requests are sent with `think: false`. Models that support chain-of-thought reasoning (QwQ, DeepSeek-R1, etc.) will not emit reasoning/thinking tokens — only the final answer. |
+| **Weather is Fahrenheit only** | Temperature values from wttr.in are displayed in °F. There is no Celsius toggle in v0.1. |
 
 ---
 
@@ -451,6 +457,18 @@ The camera button only appears when the input area is **expanded** (i.e., when y
 ### Chat history is empty after I relaunch the app
 
 By design. Conversation history is stored in memory only and is not persisted to disk. This is a v0.1 limitation. All prior turns are lost when you quit.
+
+---
+
+### I can't select or copy text from the AI's response
+
+Known limitation in v0.1. Responses are rendered via MarkdownUI without text selection enabled, so standard click-and-drag or ⌘A / ⌘C does not work on response text. As a workaround, ask the model to repeat the specific content you need in the input field, where you can copy it freely. This will be addressed in a future release.
+
+---
+
+### My reasoning model (QwQ, DeepSeek-R1, etc.) isn't showing its thinking steps
+
+By design. All Ollama requests are sent with `think: false`, which suppresses chain-of-thought / reasoning token output and returns only the final answer. The panel is too compact to usefully display long reasoning traces. This may become configurable in a future release.
 
 ---
 

@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
 # LocalNotch release script
 # Usage: ./scripts/release.sh [version]
-# Example: ./scripts/release.sh 0.1.0-beta
+# Example: ./scripts/release.sh 0.1.1-beta
 # Produces: LocalNotch.zip in the repo root, ready to upload to GitHub Releases.
 
 set -euo pipefail
 
-VERSION="${1:-0.1.0-beta}"
+VERSION="${1:-0.1.1-beta}"
 APP_NAME="LocalNotch"
 BUNDLE_ID="com.localnotch"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="$REPO_ROOT/.build/release"
 STAGING="$REPO_ROOT/.build/staging"
 APP_BUNDLE="$STAGING/$APP_NAME.app"
+ZIP_PATH="$REPO_ROOT/LocalNotch.zip"
 
 echo "==> Building $APP_NAME v$VERSION"
 
@@ -82,19 +83,37 @@ codesign --force --deep --sign - \
     -r="designated => identifier \"$BUNDLE_ID\"" \
     "$APP_BUNDLE"
 
-# Verify the designated requirement is identifier-based, not cdhash-based.
+# Verify the app identity is stable before packaging. Screen Recording permission
+# is keyed to this identity, so a cdhash-based ad-hoc requirement will break TCC
+# persistence across rebuilds/reinstalls.
+SIGNING_INFO=$(codesign -dv --verbose=4 "$APP_BUNDLE" 2>&1)
+IDENTIFIER=$(printf '%s\n' "$SIGNING_INFO" | sed -n 's/^Identifier=//p' | head -n 1)
 DR=$(codesign -d -r- "$APP_BUNDLE" 2>&1 | grep "designated =>" || true)
 echo "    $DR"
+if [ "$IDENTIFIER" != "$BUNDLE_ID" ]; then
+    echo "ERROR: codesign identifier is '$IDENTIFIER', expected '$BUNDLE_ID'."
+    exit 1
+fi
 if echo "$DR" | grep -q "cdhash"; then
-    echo "    WARNING: designated requirement is cdhash-based — TCC permissions will not persist across rebuilds."
+    echo "ERROR: designated requirement is cdhash-based — TCC permissions will not persist across rebuilds."
+    exit 1
+fi
+if ! echo "$DR" | grep -q "identifier \"$BUNDLE_ID\""; then
+    echo "ERROR: designated requirement does not contain identifier '$BUNDLE_ID'."
+    exit 1
+fi
+if echo "$SIGNING_INFO" | grep -q "Info.plist=not bound"; then
+    echo "ERROR: Info.plist is not sealed into the code signature."
+    exit 1
 fi
 
 # Zip
 echo "==> Creating LocalNotch.zip"
+rm -f "$ZIP_PATH"
 cd "$STAGING"
-zip -r "$REPO_ROOT/LocalNotch.zip" "$APP_NAME.app"
+zip -r "$ZIP_PATH" "$APP_NAME.app"
 
 echo ""
-echo "Done: $REPO_ROOT/LocalNotch.zip"
+echo "Done: $ZIP_PATH"
 echo "Upload this file to GitHub Releases and mark as Pre-release."
 echo "Users must right-click → Open the first time to bypass Gatekeeper."

@@ -19,7 +19,7 @@ LocalNotch is a macOS AI assistant that lives in your MacBook's notch. Hover to 
   <video src="https://github.com/user-attachments/assets/acdf91b3-a8b0-4a01-bcea-b0e55e262141" autoplay loop muted playsinline controls width="100%"></video>
 </p>
 
-> **This is beta software.** LocalNotch is v0.1.0 and actively developed. You may encounter bugs, rough edges, and missing features. Apple Silicon only. See [Known Limitations](#known-limitations) before installing.
+> **This is beta software.** LocalNotch is v0.1.1-beta and actively developed. You may encounter bugs, rough edges, and missing features. Apple Silicon only. See [Known Limitations](#known-limitations) before installing.
 
 ---
 
@@ -215,7 +215,7 @@ A masked text field for your Brave Search API key. Click the eye icon to reveal 
 
 ### About
 
-- Version number (v0.1.0-beta)
+- Version number (v0.1.1-beta)
 - GitHub link
 - MIT License link
 - **Show onboarding again** — re-runs the full 6-step onboarding flow
@@ -322,7 +322,8 @@ swift build -c release --arch arm64
 3. Copies the binary and `AppIcon.icns`
 4. Writes `Info.plist` with the bundle ID (`com.localnotch`), version, and `NSScreenCaptureUsageDescription`
 5. Ad-hoc signs with `codesign --force --deep --sign -`
-6. Zips the `.app` bundle
+6. Verifies the app is signed as `com.localnotch` with an identifier-based designated requirement, not a cdhash-based one
+7. Zips the `.app` bundle
 
 ### Dependencies (resolved automatically by Swift Package Manager)
 
@@ -370,14 +371,14 @@ Services:
 - **Debounced hover** — the notch expand/compact is debounced with a 200ms grace period to prevent layout-recalculation flicker from causing a race condition between `expand()` and `compact()`.
 - **Non-overridable system prompt preamble** — web search capability declarations are prepended in `ChatState.prepareForSend()`, not in the user-editable system prompt, so models can't be talked out of acknowledging search results.
 - **History sync on search** — after building the augmented message (user text + `<web_search>` block), `updateLastUserContent()` writes the full augmented string back into the conversation history so follow-up turns see the same context the model saw.
-- **SCScreenshotManager + identifier-based designated requirement** — the release script pins the codesign designated requirement to the bundle identifier (`com.localnotch`) rather than letting it default to a cdhash. macOS TCC keys Screen Recording permission to the DR, so ad-hoc re-signed builds don't lose the grant each time. `CGWindowListCreateImage` was removed — it is fully obsoleted on macOS 15+.
+- **SCScreenshotManager + identifier-based designated requirement** — the release script pins the codesign designated requirement to the bundle identifier (`com.localnotch`) rather than letting it default to a cdhash. macOS TCC keys Screen Recording permission to the DR, so ad-hoc re-signed builds don't lose the grant each time. The release script now fails if the packaged app has the wrong identifier, a cdhash-based requirement, or an unsealed `Info.plist`. `CGWindowListCreateImage` was removed — it is fully obsoleted on macOS 15+.
 - **Vision detection** — `OllamaTagsResponse.Model.isVisionCapable` checks the model's `families` metadata for CLIP, mllama, and moondream families, plus name-based heuristics for LLaVA and `-vl` variants.
 
 ---
 
 ## Known Limitations
 
-These are documented accepted limitations for the v0.1.0 beta.
+These are documented accepted limitations for the v0.1 beta.
 
 | Limitation | Notes |
 |---|---|
@@ -385,7 +386,7 @@ These are documented accepted limitations for the v0.1.0 beta.
 | **Single-display capture** | The screenshot button captures only the main display. |
 | **No conversation persistence** | Chat history lives in memory. Quitting the app loses it. |
 | **No auto-update** | Check [Releases](https://github.com/s24b/LocalNotch/releases) manually. |
-| **Screen Recording re-prompt** | macOS 15.0 (Sequoia) re-prompts for Screen Recording permission approximately once a month for non-notarized apps. macOS 15.1 and later (including macOS 26 Tahoe) reduced this further — prompts become less frequent the more regularly you use the app. This is a macOS policy; it cannot be fixed without an Apple Developer account and notarization. |
+| **Screen Recording awareness prompt** | macOS 15.0 (Sequoia) re-prompts for Screen Recording permission approximately once a month for non-notarized apps. macOS 15.1 and later (including macOS 26 Tahoe) reduced this further — prompts become less frequent the more regularly you use the app. Persistent prompts on every capture were fixed in v0.1.1-beta by stabilizing the app's signing identity; occasional macOS awareness prompts remain a system policy for non-notarized apps. |
 | **Apple Silicon only** | Intel Macs are not supported. |
 | **Localhost Ollama only** | Remote or custom-URL Ollama instances are not supported in v0.1. |
 | **API key in UserDefaults** | The Brave Search API key is stored in `UserDefaults`, not in Keychain. It is stored locally on your machine and never transmitted anywhere. |
@@ -463,7 +464,17 @@ This means the model's training strongly overrides in-context instructions. Ensu
 
 ### Screen Recording permission prompt keeps reappearing
 
-This is expected behavior for non-notarized apps on macOS 15 and later. On macOS 15.0 (Sequoia) the prompt appears approximately once a month; on macOS 15.1 and later (including macOS 26 Tahoe) it becomes less frequent the more regularly you use the app. When the prompt appears, click **Allow** again. This cannot be fixed without a full Apple Developer account and notarization.
+If this happens on every capture, install v0.1.1-beta or later. Earlier or incorrectly copied builds could be signed with a cdhash-based identity, which made macOS treat each rebuild as a different app even when **Screen & System Audio Recording** was toggled on.
+
+After installing v0.1.1-beta or later:
+
+1. Make sure there is only one app at `/Applications/LocalNotch.app` — not a nested `/Applications/LocalNotch.app/LocalNotch.app`.
+2. Quit and relaunch LocalNotch after granting Screen Recording permission.
+3. If needed, toggle LocalNotch off and on once in **System Settings → Privacy & Security → Screen & System Audio Recording**.
+
+On macOS 15 and later, non-notarized apps may still receive occasional system awareness prompts. On macOS 15.0 (Sequoia) this was approximately monthly; on macOS 15.1 and later, including macOS 26 Tahoe, prompts become less frequent with regular use. When an occasional prompt appears, click **Allow** again.
+
+Screenshot diagnostics are written to `~/Library/Logs/LocalNotch/screen-capture.log` to help debug future ScreenCaptureKit failures without showing extra UI.
 
 ---
 

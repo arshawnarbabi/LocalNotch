@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.1.1-beta (2026-05-12)
+
+### Fixed
+- Fixed persistent Screen Recording permission prompts caused by unstable ad-hoc signing or malformed installs.
+- Hardened the release script so packaging fails if LocalNotch is signed with a cdhash-based designated requirement, the wrong bundle identifier, or an unsealed Info.plist.
+- Added quiet screenshot diagnostics at `~/Library/Logs/LocalNotch/screen-capture.log` to make future ScreenCaptureKit failures easier to debug without adding UI.
+
 ## v0.1.0-beta (2026-05-11)
 
 Initial public release.

@@ -719,16 +719,21 @@ If asked whether a web search was performed, say YES.</instruction>
         state.isCapturing = true
 
         let bundleID = Bundle.main.bundleIdentifier ?? "(none)"
+        ScreenCaptureDiagnostics.log("capture requested")
+        ScreenCaptureDiagnostics.logBundleIdentity()
 
         Task { @MainActor in
             do {
+                ScreenCaptureDiagnostics.log("loading shareable content")
                 let content = try await SCShareableContent.current
                 guard let display = content.displays.first else {
+                    ScreenCaptureDiagnostics.log("no displays returned by ScreenCaptureKit")
                     state.isCapturing = false
                     state.currentResponse = "No display found.\n\n_diag: bundle=\(bundleID)_"
                     state.isLoading = false
                     return
                 }
+                ScreenCaptureDiagnostics.log("shareable content loaded displays=\(content.displays.count) apps=\(content.applications.count) windows=\(content.windows.count)")
 
                 // Exclude our own app so the notch panel doesn't appear in the screenshot.
                 let ourApp = content.applications.first { $0.bundleIdentifier == "com.localnotch" }
@@ -748,7 +753,9 @@ If asked whether a web search was performed, say YES.</instruction>
                 config.captureResolution = .best
                 config.showsCursor = false
 
+                ScreenCaptureDiagnostics.log("capturing image width=\(config.width) height=\(config.height) displayID=\(display.displayID)")
                 let cgImage = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
+                ScreenCaptureDiagnostics.log("capture succeeded image=\(cgImage.width)x\(cgImage.height)")
                 state.isCapturing = false
                 // Convert to base64 NOW from the raw CGImage — before wrapping in NSImage.
                 // NSImage.cgImage(forProposedRect:) can return nil on a zero-sized image,
@@ -762,6 +769,7 @@ If asked whether a web search was performed, say YES.</instruction>
             } catch {
                 state.isCapturing = false
                 let nsErr = error as NSError
+                ScreenCaptureDiagnostics.log("capture failed domain=\(nsErr.domain) code=\(nsErr.code) description=\(error.localizedDescription)")
                 state.currentResponse = """
                 **Screenshot failed.**
 
@@ -837,6 +845,53 @@ If asked whether a web search was performed, say YES.</instruction>
         CGImageDestinationAddImage(dest, resized, [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary)
         guard CGImageDestinationFinalize(dest) else { return nil }
         return (data as Data).base64EncodedString()
+    }
+}
+
+private enum ScreenCaptureDiagnostics {
+    private static var logURL: URL? {
+        guard let base = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+        return base
+            .appendingPathComponent("Logs", isDirectory: true)
+            .appendingPathComponent("LocalNotch", isDirectory: true)
+            .appendingPathComponent("screen-capture.log", isDirectory: false)
+    }
+
+    static func logBundleIdentity() {
+        let bundle = Bundle.main
+        let info = [
+            "bundleID=\(bundle.bundleIdentifier ?? "(none)")",
+            "bundlePath=\(bundle.bundlePath)",
+            "executablePath=\(bundle.executablePath ?? "(none)")",
+            "version=\(bundle.infoDictionary?["CFBundleShortVersionString"] as? String ?? "(none)")"
+        ].joined(separator: " ")
+        log(info)
+    }
+
+    static func log(_ message: String) {
+        guard let url = logURL else { return }
+        do {
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            let timestamp = ISO8601DateFormatter().string(from: Date())
+            let line = "[\(timestamp)] \(message)\n"
+            if let data = line.data(using: .utf8) {
+                if FileManager.default.fileExists(atPath: url.path),
+                   let handle = try? FileHandle(forWritingTo: url) {
+                    try handle.seekToEnd()
+                    try handle.write(contentsOf: data)
+                    try handle.close()
+                } else {
+                    try data.write(to: url, options: .atomic)
+                }
+            }
+        } catch {
+            // Diagnostics should never affect capture.
+        }
     }
 }
 

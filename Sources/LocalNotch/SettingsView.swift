@@ -8,13 +8,14 @@ struct SettingsView: View {
     @State private var activeSection: SettingsSection? = nil
 
     enum SettingsSection: CaseIterable {
-        case models, webSearch, personality, about
+        case models, webSearch, personality, agent, about
 
         var title: String {
             switch self {
             case .models:     "Models"
             case .webSearch:  "Web Search"
             case .personality: "Personality"
+            case .agent:      "Agent"
             case .about:      "About"
             }
         }
@@ -23,6 +24,7 @@ struct SettingsView: View {
             case .models:     "cpu"
             case .webSearch:  "magnifyingglass"
             case .personality: "person.circle"
+            case .agent:      "sparkles"
             case .about:      "info.circle"
             }
         }
@@ -99,6 +101,7 @@ struct SettingsView: View {
         case .models:      ModelsSettingsView()
         case .webSearch:   WebSearchSettingsView()
         case .personality: PersonalitySettingsView()
+        case .agent:       AgentSettingsView()
         case .about:       AboutSettingsView()
         case nil:          EmptyView()
         }
@@ -586,5 +589,323 @@ struct AboutLinkButton: View {
         .animation(.spring(response: 0.18, dampingFraction: 0.6), value: pressing)
         .background(AlwaysActiveHoverDetector { hovering = $0 })
         .overlay(AppKitTapHandler(action: action, onPressChanged: { pressing = $0 }))
+    }
+}
+
+// MARK: - Agent Section
+
+struct AgentSettingsView: View {
+    @ObservedObject private var settings = AppSettings.shared
+    @State private var allModels: [OllamaTagsResponse.Model] = []
+    @State private var ollamaStatus: AgentOllamaStatus = .loading
+    @State private var ollamaVersion: SemVer? = nil
+    @State private var showAllModels = false
+    @State private var agentDropdownOpen = false
+    @State private var smokeTestStatus: SmokeTestStatus = .idle
+    @State private var customPathDraft = ""
+
+    static let minVersion = SemVer(major: 0, minor: 4, patch: 0)
+
+    enum AgentOllamaStatus { case loading, ok, unreachable }
+    enum SmokeTestStatus { case idle, running, passed, failed }
+
+    var agentEnabled: Bool {
+        guard let v = ollamaVersion else { return false }
+        return v >= Self.minVersion
+            && !settings.agentModel.isEmpty
+            && smokeTestStatus == .passed
+    }
+
+    var filteredModels: [String] {
+        guard ollamaStatus == .ok else { return [] }
+        if showAllModels { return allModels.map(\.name).sorted() }
+        return allModels.filter { isThinkingCapable($0) }.map(\.name).sorted()
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                versionBanner
+                modelPicker
+                smokeTestRow
+                reasoningToggle
+                allowedPathsSection
+                ramHelpText
+            }
+            .padding(.horizontal, 14)
+            .padding(.bottom, 14)
+        }
+        .scrollIndicators(.hidden)
+        .task { await loadState() }
+    }
+
+    // MARK: Sub-views
+
+    @ViewBuilder
+    private var versionBanner: some View {
+        if ollamaStatus == .unreachable {
+            bannerView(color: Color.red.opacity(0.18), text: "Ollama not reachable. Start Ollama to use Agent Mode.")
+        } else if let v = ollamaVersion, v < Self.minVersion {
+            bannerView(color: Color.orange.opacity(0.20), text: "Ollama \(v.major).\(v.minor).\(v.patch) detected. Agent Mode requires Ollama 0.4.0+. Update at ollama.com.")
+        } else if agentEnabled {
+            bannerView(color: Color.green.opacity(0.14), text: "Agent mode enabled with \(settings.agentModel).")
+        } else if !settings.agentModel.isEmpty && smokeTestStatus != .passed {
+            bannerView(color: Color.white.opacity(0.07), text: "No agent model selected — agent mode disabled.")
+        } else {
+            bannerView(color: Color.white.opacity(0.07), text: "Select a reasoning model to enable agent mode.")
+        }
+    }
+
+    private var modelPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Agent model")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white.opacity(0.5))
+                Spacer()
+                HStack(spacing: 4) {
+                    Text("Show all")
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.4))
+                    Toggle("", isOn: $showAllModels)
+                        .toggleStyle(.switch)
+                        .scaleEffect(0.65)
+                        .frame(width: 36)
+                        .tint(Color.white.opacity(0.3))
+                }
+            }
+
+            ModelDropdownRow(
+                label: "",
+                selected: settings.agentModel,
+                models: filteredModels,
+                isLoading: ollamaStatus == .loading,
+                isOpen: $agentDropdownOpen,
+                onSelect: { model in
+                    settings.agentModel = model
+                    settings.agentModelToolCallVerified.removeValue(forKey: model)
+                    smokeTestStatus = .idle
+                    withAnimation(.easeInOut(duration: 0.12)) { agentDropdownOpen = false }
+                    Task { await runSmokeTest(for: model) }
+                }
+            )
+            .zIndex(agentDropdownOpen ? 1 : 0)
+        }
+    }
+
+    @ViewBuilder
+    private var smokeTestRow: some View {
+        if !settings.agentModel.isEmpty {
+            HStack(spacing: 8) {
+                Group {
+                    switch smokeTestStatus {
+                    case .idle:
+                        Text("Not tested")
+                            .foregroundColor(.white.opacity(0.35))
+                    case .running:
+                        HStack(spacing: 5) {
+                            ProgressView().tint(.white).scaleEffect(0.6)
+                            Text("Verifying tool calling…").foregroundColor(.white.opacity(0.5))
+                        }
+                    case .passed:
+                        HStack(spacing: 5) {
+                            Image(systemName: "checkmark.circle.fill").foregroundColor(Color(red: 0.3, green: 0.85, blue: 0.5))
+                            Text("Tool calling verified").foregroundColor(.white.opacity(0.7))
+                        }
+                    case .failed:
+                        HStack(spacing: 5) {
+                            Image(systemName: "xmark.circle.fill").foregroundColor(Color(red: 1.0, green: 0.4, blue: 0.4))
+                            Text("Model does not support tool calling").foregroundColor(.white.opacity(0.7))
+                        }
+                    }
+                }
+                .font(.system(size: 11))
+                Spacer()
+                if smokeTestStatus != .running {
+                    Text("Re-test")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.white.opacity(0.4))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .modifier(GlassPillModifier())
+                        .overlay(AppKitTapHandler {
+                            Task { await runSmokeTest(for: settings.agentModel) }
+                        })
+                }
+            }
+        }
+    }
+
+    private var reasoningToggle: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Show full reasoning trace")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white)
+                Text("Expose chain-of-thought in agent bubbles")
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.4))
+            }
+            Spacer()
+            Toggle("", isOn: $settings.agentShowReasoningTrace)
+                .toggleStyle(.switch)
+                .scaleEffect(0.75)
+                .tint(Color(red: 0.4, green: 0.7, blue: 1.0))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .modifier(GlassPillModifier())
+    }
+
+    private var allowedPathsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Allowed paths for writes")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.white.opacity(0.5))
+            Text("Writes inside these paths are autonomous. Writes elsewhere require approval.")
+                .font(.system(size: 10))
+                .foregroundColor(.white.opacity(0.35))
+                .fixedSize(horizontal: false, vertical: true)
+
+            VStack(spacing: 4) {
+                ForEach(settings.agentAllowedPaths, id: \.self) { path in
+                    HStack {
+                        Text(path.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundColor(.white.opacity(0.75))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Spacer()
+                        Image(systemName: "xmark")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(.white.opacity(0.35))
+                            .frame(width: 18, height: 18)
+                            .overlay(AppKitTapHandler {
+                                settings.agentAllowedPaths.removeAll { $0 == path }
+                            })
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.white.opacity(0.06))
+                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.09), lineWidth: 0.5))
+                    )
+                }
+            }
+
+            HStack(spacing: 6) {
+                TextField("Add path (e.g. ~/Projects)", text: $customPathDraft)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.white)
+                    .tint(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .modifier(GlassPillModifier())
+
+                Image(systemName: "plus")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.6))
+                    .frame(width: 30, height: 30)
+                    .modifier(GlassPillModifier())
+                    .overlay(AppKitTapHandler { addCustomPath() })
+            }
+        }
+    }
+
+    private var ramHelpText: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text("Recommended models")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.white.opacity(0.5))
+            ForEach([
+                ("8 GB Mac", "deepseek-r1:7b"),
+                ("16 GB Mac (recommended)", "deepseek-r1:14b"),
+                ("32 GB Mac", "qwq:32b")
+            ], id: \.0) { label, model in
+                HStack(spacing: 6) {
+                    Text(label + ":")
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.35))
+                    Text(model)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.55))
+                    Spacer()
+                    Image(systemName: "doc.on.doc")
+                        .font(.system(size: 9))
+                        .foregroundColor(.white.opacity(0.3))
+                        .overlay(AppKitTapHandler {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString("ollama pull \(model)", forType: .string)
+                        })
+                }
+            }
+        }
+    }
+
+    // MARK: Helpers
+
+    private func bannerView(color: Color, text: String) -> some View {
+        Text(text)
+            .font(.system(size: 11))
+            .foregroundColor(.white.opacity(0.7))
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background(RoundedRectangle(cornerRadius: 10).fill(color))
+    }
+
+    private func isThinkingCapable(_ model: OllamaTagsResponse.Model) -> Bool {
+        OllamaAPI.shared.isThinkingCapable(model: model)
+    }
+
+    private func addCustomPath() {
+        let raw = customPathDraft.trimmingCharacters(in: .whitespaces)
+        guard !raw.isEmpty else { return }
+        let expanded = NSString(string: raw).expandingTildeInPath
+        guard !settings.agentAllowedPaths.contains(expanded) else { customPathDraft = ""; return }
+        settings.agentAllowedPaths.append(expanded)
+        customPathDraft = ""
+    }
+
+    private func loadState() async {
+        async let versionTask: SemVer? = try? await OllamaAPI.shared.ollamaVersion()
+        async let tagsTask: OllamaTagsResponse? = {
+            guard let url = URL(string: "http://localhost:11434/api/tags"),
+                  let (data, _) = try? await OllamaAPI.statusSession.data(from: url) else { return nil }
+            return try? JSONDecoder().decode(OllamaTagsResponse.self, from: data)
+        }()
+
+        let v = await versionTask
+        let tags = await tagsTask
+
+        await MainActor.run {
+            ollamaVersion = v
+            ollamaStatus = (tags != nil) ? .ok : .unreachable
+            allModels = tags?.models ?? []
+        }
+
+        if !settings.agentModel.isEmpty {
+            let cached = settings.agentModelToolCallVerified[settings.agentModel]
+            if let cached {
+                await MainActor.run { smokeTestStatus = cached ? .passed : .failed }
+            } else {
+                await runSmokeTest(for: settings.agentModel)
+            }
+        }
+    }
+
+    private func runSmokeTest(for model: String) async {
+        await MainActor.run { smokeTestStatus = .running }
+        let result = await OllamaAPI.shared.verifyToolCalling(model: model)
+        await MainActor.run {
+            settings.agentModelToolCallVerified[model] = result
+            smokeTestStatus = result ? .passed : .failed
+            if !result && settings.agentModel == model {
+                // Don't auto-clear selection — user may want to try a different model, not lose their choice
+            }
+        }
     }
 }

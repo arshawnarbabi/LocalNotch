@@ -60,6 +60,23 @@ found, state that plainly and answer with what you know. Trust the query — do 
     }
     @Published var notchContentHeight: CGFloat = 300
 
+    // MARK: — Agent Mode settings
+
+    @Published var agentModel: String {
+        didSet { UserDefaults.standard.set(agentModel, forKey: "agentModel") }
+    }
+    @Published var agentShowReasoningTrace: Bool {
+        didSet { UserDefaults.standard.set(agentShowReasoningTrace, forKey: "agentShowReasoningTrace") }
+    }
+    @Published var agentAllowedPaths: [String] {
+        didSet {
+            UserDefaults.standard.set(agentAllowedPaths, forKey: "agentAllowedPaths")
+        }
+    }
+    // Cached smoke-test results keyed by model name — avoids re-testing on every Settings open.
+    // Not UserDefaults-backed; cleared on app launch so stale caches don't hide regressions after Ollama updates.
+    var agentModelToolCallVerified: [String: Bool] = [:]
+
     private init() {
         textModelName    = UserDefaults.standard.string(forKey: "textModelName") ?? ""
         visionModelName  = UserDefaults.standard.string(forKey: "visionModelName") ?? ""
@@ -69,5 +86,13 @@ found, state that plainly and answer with what you know. Trust the query — do 
         onboardingComplete = UserDefaults.standard.bool(forKey: "onboardingComplete")
         let saved = UserDefaults.standard.integer(forKey: "onboardingStep")
         onboardingStep = saved > 0 ? saved : 1
+        agentModel = UserDefaults.standard.string(forKey: "agentModel") ?? ""
+        agentShowReasoningTrace = UserDefaults.standard.bool(forKey: "agentShowReasoningTrace")
+        let savedPaths = UserDefaults.standard.stringArray(forKey: "agentAllowedPaths")
+        agentAllowedPaths = savedPaths ?? [
+            NSString(string: "~/Desktop").expandingTildeInPath,
+            NSString(string: "~/Documents").expandingTildeInPath,
+            NSString(string: "~/Downloads").expandingTildeInPath
+        ]
     }
 }

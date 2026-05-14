@@ -535,7 +535,7 @@ struct AboutSettingsView: View {
                     Text("LocalNotch")
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundColor(.white)
-                    Text("v0.1.0-beta")
+                    Text("v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.2.0-beta")")
                         .font(.system(size: 12))
                         .foregroundColor(.white.opacity(0.45))
                 }

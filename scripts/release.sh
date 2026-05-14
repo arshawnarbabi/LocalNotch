@@ -6,7 +6,7 @@
 
 set -euo pipefail
 
-VERSION="${1:-0.1.1-beta}"
+VERSION="${1:-0.2.0-beta}"
 APP_NAME="LocalNotch"
 BUNDLE_ID="com.localnotch"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"

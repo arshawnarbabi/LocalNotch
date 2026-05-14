@@ -19,7 +19,7 @@ LocalNotch is a macOS AI assistant that lives in your MacBook's notch. Hover to 
   <video src="https://github.com/user-attachments/assets/acdf91b3-a8b0-4a01-bcea-b0e55e262141" autoplay loop muted playsinline controls width="100%"></video>
 </p>
 
-> **This is beta software.** LocalNotch is v0.1.1-beta and actively developed. You may encounter bugs, rough edges, and missing features. Apple Silicon only. See [Known Limitations](#known-limitations) before installing.
+> **This is beta software.** LocalNotch is v0.2.0-beta and actively developed. You may encounter bugs, rough edges, and missing features. Apple Silicon only. See [Known Limitations](#known-limitations) before installing.
 
 ---
 
@@ -30,6 +30,7 @@ LocalNotch is a macOS AI assistant that lives in your MacBook's notch. Hover to 
 - [Installation](#installation)
 - [First Launch: Onboarding](#first-launch-onboarding)
 - [Using LocalNotch](#using-localnotch)
+- [Agent Mode](#agent-mode)
 - [Settings](#settings)
 - [Web Search](#web-search)
 - [Privacy](#privacy)
@@ -58,6 +59,7 @@ LocalNotch is a macOS AI assistant that lives in your MacBook's notch. Hover to 
 - **Markdown rendering** — responses support bold, italic, code spans, code blocks (horizontally scrollable), blockquotes, tables, and headings
 - **Liquid Glass UI** — native macOS 26 Tahoe glass effect on the input pill, buttons, and badges; clean frosted-glass fallback on macOS 14/15
 - **Compact notch indicator** — a pulsing dot in the collapsed notch shows the model is thinking; a green checkmark appears when it finishes
+- **Agent Mode** *(new in v0.2)* — opt-in autonomous file-system agent powered by a separate local reasoning model; reads, writes, moves, copies, and searches files on your Mac through a supervised tool loop with per-action approval and pause/resume control; screen-edge glow on task start and finish
 
 ---
 
@@ -103,7 +105,7 @@ See [Building from Source](#building-from-source) for full details.
 
 ## First Launch: Onboarding
 
-On first launch the notch expands automatically and walks you through a 6-step setup. Your progress is saved to disk — if you quit mid-flow, reopening the app resumes exactly where you left off.
+On first launch the notch expands automatically and walks you through a 7-step setup. Your progress is saved to disk — if you quit mid-flow, reopening the app resumes exactly where you left off.
 
 ### Step 1 — Ollama check
 
@@ -147,7 +149,21 @@ ollama pull moondream         # smallest footprint
 
 Paste a [Brave Search API key](https://api.search.brave.com/register) to enable live web search. The free tier provides 1,000 queries/month. You can skip this now and add it later in **Settings → Web Search**.
 
-### Step 6 — Done
+### Step 6 — Agent Model *(optional)*
+
+Set up a dedicated reasoning model for Agent Mode. Agent Mode uses a separate model from your chat model because agentic tasks benefit from deeper reasoning; keeping them separate also means your chat model stays fast and lightweight.
+
+**Recommended by available RAM:**
+
+| RAM | Model | Pull command |
+|---|---|---|
+| 8 GB | deepseek-r1:7b | `ollama pull deepseek-r1:7b` |
+| 16 GB | deepseek-r1:14b | `ollama pull deepseek-r1:14b` |
+| 32 GB+ | qwq:32b | `ollama pull qwq:32b` |
+
+You can skip this step and configure Agent Mode later in **Settings → Agent**. The agent button in the notch will remain hidden until a model is verified.
+
+### Step 7 — Done
 
 A confirmation screen. Click "Let's go" to close onboarding and start using the app. You can re-run onboarding at any time via **Settings → About → Show onboarding again**.
 
@@ -191,6 +207,78 @@ A confirmation screen. Click "Let's go" to close onboarding and start using the 
 
 ---
 
+## Agent Mode
+
+Agent Mode is an opt-in autonomous file-system agent that can read, write, move, copy, rename, create, delete, and search files on your Mac — all from a natural-language description of the task. It is designed for multi-step file-management work that would otherwise take many manual steps.
+
+### Requirements
+
+| Requirement | Details |
+|---|---|
+| Ollama | Version 0.4.0 or later (for streaming tool-call support) |
+| RAM | 16 GB recommended (for deepseek-r1:14b); 8 GB minimum (for :7b) |
+| Agent model | A reasoning model pulled separately from your chat model |
+
+### How it works
+
+Agent Mode uses a dedicated reasoning model (not your chat model) and a loop:
+
+1. You describe the task in natural language ("rename all the `.jpeg` files in my Downloads folder to `.jpg`")
+2. The model reasons about the task and emits a structured tool call
+3. LocalNotch shows you what it's about to do and asks for approval (configurable per-session)
+4. The tool executes; result is fed back to the model
+5. The loop continues until the model emits `task_complete`, you pause, or you force-stop
+
+The agent has access to 9 file-system tools: `read_file`, `write_file`, `list_directory`, `move_item`, `copy_item`, `create_directory`, `delete_item`, `find_files`, and `run_shell`.
+
+> **`run_shell` always requires explicit per-call approval**, regardless of your approval setting, and is disabled by default. Shell commands are shown in full before execution.
+
+### Starting a task
+
+1. Hover the notch to expand it.
+2. Expand the input pill and look for the pearlescent orb button to the right of the camera button. (It appears only when an agent model has been verified in Settings.)
+3. Click the orb to enter Agent Mode.
+4. Describe the task in natural language and press **Return**.
+
+### During a task
+
+The agent panel shows:
+
+- The pearlescent orb in the top-left corner, which pulses while the model is reasoning
+- Two tabs: **Chat** (model messages and tool results as conversation bubbles) and **Actions** (a structured log of every tool call with its result and timestamp)
+- A **pause** button (‖) to suspend the loop without losing context; press ▶ to resume
+- A **force-stop** button (✕) to terminate the loop immediately; the last completed action is reported
+
+When the agent needs clarification or explicit approval for a tool call, the orb turns yellow and a prompt appears in the Chat tab. The compact notch indicator also turns yellow to alert you even when the panel is collapsed.
+
+### Approval modes
+
+Agent Mode has two approval settings, configurable in **Settings → Agent**:
+
+- **Approve all tools** — shows a confirmation dialog before every tool call (default for new users)
+- **Auto-approve safe tools** — only `run_shell` and `delete_item` require approval; all other tools execute immediately
+
+You can change this setting per-session from the agent panel.
+
+### Screen-edge glow
+
+When a task starts and when it finishes successfully, a brief pearlescent glow sweeps all four screen edges. This effect respects **System Settings → Accessibility → Reduce Motion** — it is suppressed when that option is on.
+
+### Context window
+
+The agent tracks total token usage against the model's context window. When usage reaches 85% of the context limit, the agent automatically summarizes the conversation history and continues from the summary.
+
+### What the agent can access
+
+By default the agent can access:
+
+- Your home directory (`~/`)
+- `/tmp`
+
+Paths outside these roots are blocked unless you add them in **Settings → Agent → Allowed Paths**. Absolute paths beginning with `/System`, `/usr`, `/bin`, and `/sbin` are always blocked regardless of the allow-list.
+
+---
+
 ## Settings
 
 Open Settings with **⌘,** from the menu bar sparkle icon. Settings opens in a separate 360 × 480 window. Navigate with the section list; tap the back chevron to return.
@@ -213,12 +301,18 @@ A masked text field for your Brave Search API key. Click the eye icon to reveal 
 - **Display name** — the name shown in your idle-screen greeting.
 - **System prompt** — a multiline editor for the full system prompt sent to the model on every turn. The default prompt includes tone, behavior, and web search instructions. A **Reset to default** button restores the original; tap it once to arm (shows "Tap again to confirm"), tap again within 3 seconds to confirm.
 
+### Agent
+
+- **Agent model** — dropdown listing all models installed in Ollama. Select the model you want to use for agent tasks, then click **Test** to run a smoke test (the model must successfully emit a tool call to pass). A verified model enables the orb button in the notch.
+- **Approval mode** — toggle between "Approve all tools" and "Auto-approve safe tools" (see [Agent Mode → Approval modes](#approval-modes)).
+- **Allowed Paths** — additional directory paths the agent may access beyond `~/` and `/tmp`.
+
 ### About
 
-- Version number (v0.1.1-beta)
+- Version number (v0.2.0-beta)
 - GitHub link
 - MIT License link
-- **Show onboarding again** — re-runs the full 6-step onboarding flow
+- **Show onboarding again** — re-runs the full 7-step onboarding flow
 
 ---
 
@@ -349,20 +443,31 @@ main.swift
         │                 ├── ImageProcessingDots — vision processing indicator
         │                 ├── responseScrollView  — streaming markdown response
         │                 ├── HistoryView         — chat history panel
-        │                 └── inputArea           — pill input + capture button + spheres
+        │                 ├── AgentModeView       — full agent panel (orb + history tabs)
+        │                 │     ├── PearlescentOrb     — animated multi-layer gradient orb
+        │                 │     └── AgentHistoryView   — Chat + Actions tabs
+        │                 └── inputArea           — pill input + capture + orb buttons
+        ├── AgentGlowWindow           — NSWindow at .screenSaver, full-screen edge glow
         ├── NSStatusItem              — menu bar sparkle icon → Settings / Quit
         └── NSWindow (settingsWindow) — SettingsView, 360×480, dark
-              └── SettingsView        — 4 sections: Models, Web Search, Personality, About
+              └── SettingsView        — 5 sections: Models, Agent, Web Search, Personality, About
 
 State layer:
   ChatState          — @Published: currentResponse, isLoading, isSearching,
                         isProcessingImage, chatHistory, capturedImage, lastSearchQuery
-  AppSettings        — @Published UserDefaults-backed singleton
+  AppSettings        — @Published UserDefaults-backed singleton;
+                        agentVerifiedModel gate controls orb button visibility
+  AgentRunner        — @MainActor ObservableObject; A–H state machine (welcome / idle /
+                        running / paused / finished / forceStopped / clarifying / approving)
 
 Services:
-  OllamaAPI          — AsyncThrowingStream<String> streaming chat via /api/chat
+  OllamaAPI          — AsyncThrowingStream<String> streaming chat via /api/chat;
+                        contextLengthFor() for agent context-window tracking
   BraveSearchService — Brave /api/v1/web/search, returns formatted result block
   WeatherService     — wttr.in polling every 10 min
+  AgentTools         — 9 file-system tools: read_file, write_file, list_directory,
+                        move_item, copy_item, create_directory, delete_item,
+                        find_files, run_shell (always requires approval)
 ```
 
 ### Key design decisions
@@ -373,6 +478,9 @@ Services:
 - **History sync on search** — after building the augmented message (user text + `<web_search>` block), `updateLastUserContent()` writes the full augmented string back into the conversation history so follow-up turns see the same context the model saw.
 - **SCScreenshotManager + identifier-based designated requirement** — the release script pins the codesign designated requirement to the bundle identifier (`com.localnotch`) rather than letting it default to a cdhash. macOS TCC keys Screen Recording permission to the DR, so ad-hoc re-signed builds don't lose the grant each time. The release script now fails if the packaged app has the wrong identifier, a cdhash-based requirement, or an unsealed `Info.plist`. `CGWindowListCreateImage` was removed — it is fully obsoleted on macOS 15+.
 - **Vision detection** — `OllamaTagsResponse.Model.isVisionCapable` checks the model's `families` metadata for CLIP, mllama, and moondream families, plus name-based heuristics for LLaVA and `-vl` variants.
+- **`agentVerifiedModel` gate** — a persisted `@Published String` in `AppSettings` that is set only when a smoke test passes for a specific model name. The orb button in the chat input area observes this property, so it appears only when the configured agent model has been verified. Clearing or changing the model clears the gate.
+- **Agent context-window tracking** — `OllamaAPI.contextLengthFor()` uses flexible suffix matching (`*.context_length`) instead of the hardcoded `llama.context_length` key, so it works with DeepSeek-R1, QwQ, and other non-Llama model families.
+- **Orb position animation** — `matchedGeometryEffect` was avoided because it requires both views to coexist in the hierarchy simultaneously. Instead, `GeometryReader` + `.position(x:y:)` animates a single orb view from the idle center position to a small corner position, giving a smooth spring transition without dual-view bookkeeping.
 
 ---
 
@@ -393,6 +501,11 @@ These are documented accepted limitations for the v0.1 beta.
 | **Response text is not selectable** | AI responses are rendered via MarkdownUI using SwiftUI `Text` views without `.textSelection(.enabled)`. You cannot highlight or copy text from a response in v0.1. |
 | **Reasoning tokens suppressed** | All Ollama requests are sent with `think: false`. Models that support chain-of-thought reasoning (QwQ, DeepSeek-R1, etc.) will not emit reasoning/thinking tokens — only the final answer. |
 | **Weather is Fahrenheit only** | Temperature values from wttr.in are displayed in °F. There is no Celsius toggle in v0.1. |
+| **Agent Mode: file-system only** | The agent can only interact with the local file system and run shell commands. It cannot browse the web, call external APIs, or control other apps in v0.2. |
+| **Agent Mode: no undo** | File operations (write, move, delete) performed by the agent are not undone when you force-stop. Deleted files are moved to Trash; other operations are permanent. |
+| **Agent Mode: no multi-step rollback** | If a task fails mid-way, previously completed steps are not rolled back. Review the Actions tab to see what was completed before the failure. |
+| **Agent Mode: single active task** | Only one agent task can run at a time. Starting a new task while one is in progress is a no-op; force-stop the current task first. |
+| **Agent Mode: Ollama 0.4+ required** | Agent Mode requires Ollama 0.4.0 or later for streaming tool-call support. Earlier versions will fail the smoke test. |
 
 ---
 

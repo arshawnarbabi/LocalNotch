@@ -7,10 +7,13 @@ import ScreenCaptureKit
 struct ChatView: View {
     @ObservedObject var state: ChatState
     @ObservedObject private var settings = AppSettings.shared
+    @ObservedObject private var agentRunner = AgentRunner.shared
     @State private var inputText = ""
     @State private var isInputExpanded = false
     @State private var isHoveringInput = false
     @State private var showingHistory = false
+    @State private var isInAgentMode = false
+    @State private var hoveringAgentBtn = false
     @State private var hoverExitTask: Task<Void, Never>?
     @State private var hoveringReset = false
     @State private var hoveringHistory = false
@@ -48,6 +51,9 @@ struct ChatView: View {
             if !settings.onboardingComplete {
                 OnboardingView()
                     .transition(.opacity.combined(with: .scale(scale: 0.97)))
+            } else if isInAgentMode {
+                AgentModeView(onExit: { withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) { isInAgentMode = false } })
+                    .transition(.opacity.combined(with: .scale(scale: 0.97)))
             } else if showingHistory {
                 HistoryView(history: state.chatHistory) { showingHistory = false }
                     .transition(.opacity.combined(with: .scale(scale: 0.97)))
@@ -60,6 +66,7 @@ struct ChatView: View {
             }
         }
         .animation(.spring(response: 0.38, dampingFraction: 0.82), value: settings.onboardingComplete)
+        .animation(.spring(response: 0.38, dampingFraction: 0.82), value: isInAgentMode)
         .animation(.spring(response: 0.38, dampingFraction: 0.82), value: showingHistory)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -222,6 +229,11 @@ struct ChatView: View {
                 if isInputExpanded {
                     captureButton
                         .transition(.opacity.combined(with: .scale(scale: 0.7)).animation(springAnim))
+
+                    if agentButtonEnabled {
+                        agentButton
+                            .transition(.opacity.combined(with: .scale(scale: 0.7)).animation(springAnim))
+                    }
                 }
             }
             .padding(.horizontal, isInputExpanded ? 10 : sphereSize + 18)
@@ -405,6 +417,24 @@ struct ChatView: View {
                 }
             }
         ))
+    }
+
+    private var agentButtonEnabled: Bool {
+        !settings.agentModel.isEmpty && settings.agentVerifiedModel == settings.agentModel
+    }
+
+    private var agentButton: some View {
+        ZStack {
+            PearlescentOrb(size: 30, animated: false)
+                .scaleEffect(hoveringAgentBtn ? 1.1 : 1.0)
+                .brightness(hoveringAgentBtn ? 0.12 : 0)
+                .animation(.spring(response: 0.22, dampingFraction: 0.65), value: hoveringAgentBtn)
+        }
+        .frame(width: 46, height: 46)
+        .background(AlwaysActiveHoverDetector { hoveringAgentBtn = $0 })
+        .overlay(AppKitTapHandler {
+            withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) { isInAgentMode = true }
+        })
     }
 
     private var rightSphere: some View {

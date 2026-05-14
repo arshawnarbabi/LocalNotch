@@ -11,7 +11,7 @@ struct OnboardingView: View {
     @ObservedObject private var settings = AppSettings.shared
     @State private var step: Int = AppSettings.shared.onboardingStep
 
-    private let totalSteps = 6
+    private let totalSteps = 7
     private let stepSpring = Animation.easeInOut(duration: 0.32)
 
     var body: some View {
@@ -68,13 +68,17 @@ struct OnboardingView: View {
                 .transition(stepTransition)
                 .id("step5")
         case 6:
+            AgentModelStep(onNext: advance, onSkip: advance)
+                .transition(stepTransition)
+                .id("step6")
+        case 7:
             DoneStep(onFinish: {
                 AppSettings.shared.notchContentHeight = 300
                 AppSettings.shared.onboardingStep = 1
                 AppSettings.shared.onboardingComplete = true
             })
             .transition(stepTransition)
-            .id("step6")
+            .id("step7")
         default:
             EmptyView()
         }
@@ -550,6 +554,104 @@ private struct YourNameStep: View {
 }
 
 // MARK: - Step 6: Done
+
+// MARK: - Step 6: Agent Model (optional)
+
+private struct AgentModelStep: View {
+    let onNext: () -> Void
+    let onSkip: () -> Void
+
+    @ObservedObject private var settings = AppSettings.shared
+    @State private var allModels: [String] = []
+    @State private var modelDropdownOpen = false
+    @State private var copiedCommand = ""
+
+    private let tiers: [(ram: String, model: String)] = [
+        ("8 GB Mac", "deepseek-r1:7b"),
+        ("16 GB (recommended)", "deepseek-r1:14b"),
+        ("32 GB Mac", "qwq:32b")
+    ]
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Spacer()
+
+            VStack(spacing: 6) {
+                PearlescentOrb(size: 32, animated: true)
+                Text("Agent mode")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(.white)
+                Text("Optional — skip if you just want to chat.")
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.45))
+                    .multilineTextAlignment(.center)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Agent model lets LocalNotch plan and execute real tasks on your Mac — moving files, organizing folders — using a local reasoning LLM.")
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.6))
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity)
+            }
+            .padding(.horizontal, 20)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Recommended for your Mac")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(.white.opacity(0.4))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                ForEach(tiers, id: \.model) { tier in
+                    HStack(spacing: 8) {
+                        Text(tier.ram)
+                            .font(.system(size: 10))
+                            .foregroundColor(.white.opacity(0.5))
+                        Text(tier.model)
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.white.opacity(0.85))
+                        Spacer()
+                        let cmd = "ollama pull \(tier.model)"
+                        let copied = copiedCommand == cmd
+                        Text(copied ? "Copied!" : "Copy")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(copied ? .green : .white.opacity(0.4))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .modifier(GlassPillModifier())
+                            .overlay(AppKitTapHandler {
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(cmd, forType: .string)
+                                copiedCommand = cmd
+                                Task {
+                                    try? await Task.sleep(for: .seconds(2))
+                                    if copiedCommand == cmd { copiedCommand = "" }
+                                }
+                            })
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.05)))
+                }
+            }
+            .padding(.horizontal, 16)
+
+            Text("You can also set this up later in Settings → Agent.")
+                .font(.system(size: 10))
+                .foregroundColor(.white.opacity(0.3))
+                .multilineTextAlignment(.center)
+
+            HStack(spacing: 10) {
+                OnboardingButton(label: "Skip", icon: "arrow.right") { onSkip() }
+                OnboardingButton(label: "Set up later in Settings", icon: "gearshape") { onSkip() }
+            }
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
 
 private struct DoneStep: View {
     let onFinish: () -> Void

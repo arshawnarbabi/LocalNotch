@@ -77,6 +77,13 @@ found, state that plainly and answer with what you know. Trust the query — do 
     // Not UserDefaults-backed; cleared on app launch so stale caches don't hide regressions after Ollama updates.
     var agentModelToolCallVerified: [String: Bool] = [:]
 
+    // The last model that passed the tool-calling smoke test. Persisted so the agent button
+    // can appear on next launch without waiting for another Settings open.
+    // Gate: show agent button only when this == agentModel && agentModel non-empty.
+    @Published var agentVerifiedModel: String {
+        didSet { UserDefaults.standard.set(agentVerifiedModel, forKey: "agentVerifiedModel") }
+    }
+
     private init() {
         textModelName    = UserDefaults.standard.string(forKey: "textModelName") ?? ""
         visionModelName  = UserDefaults.standard.string(forKey: "visionModelName") ?? ""
@@ -87,6 +94,7 @@ found, state that plainly and answer with what you know. Trust the query — do 
         let saved = UserDefaults.standard.integer(forKey: "onboardingStep")
         onboardingStep = saved > 0 ? saved : 1
         agentModel = UserDefaults.standard.string(forKey: "agentModel") ?? ""
+        agentVerifiedModel = UserDefaults.standard.string(forKey: "agentVerifiedModel") ?? ""
         agentShowReasoningTrace = UserDefaults.standard.bool(forKey: "agentShowReasoningTrace")
         let savedPaths = UserDefaults.standard.stringArray(forKey: "agentAllowedPaths")
         agentAllowedPaths = savedPaths ?? [

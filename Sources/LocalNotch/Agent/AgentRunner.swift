@@ -42,6 +42,7 @@ final class AgentRunner: ObservableObject {
     private var forceStopped = false
     private var resumeContinuation: CheckedContinuation<String?, Never>? = nil
     private var currentTaskIndex: Int = 0
+    private var lastExecutedTool: String = ""
 
     // Failure tracking
     private var consecutiveFailures = 0
@@ -123,8 +124,10 @@ Default allowed paths: ~/Desktop, ~/Documents, ~/Downloads. Any write outside th
         currentTaskIndex += 1
         let taskIdx = currentTaskIndex
 
-        // System message + user prompt
-        messages.append(["role": "system", "content": agentSystemPrompt])
+        // System message only on first task; chained tasks reuse the same conversation.
+        if messages.isEmpty {
+            messages.append(["role": "system", "content": agentSystemPrompt])
+        }
         messages.append(["role": "user", "content": prompt])
 
         state = .running
@@ -150,7 +153,8 @@ Default allowed paths: ~/Desktop, ~/Documents, ~/Downloads. Any write outside th
         forceStopped = true
         agentTask?.cancel()
         state = .forceStopped
-        addBubble(type: .error, text: "Stopped by user.", taskIndex: currentTaskIndex)
+        let toolMsg = lastExecutedTool.isEmpty ? "" : " Last action completed: \(lastExecutedTool)."
+        addBubble(type: .error, text: "Stopped by user.\(toolMsg)", taskIndex: currentTaskIndex)
     }
 
     // Called when user sends a reply in State G (clarification) or H (approval).
@@ -355,6 +359,7 @@ Default allowed paths: ~/Desktop, ~/Documents, ~/Downloads. Any write outside th
             }
         }
 
+        lastExecutedTool = name
         let result: ToolResult
         do {
             result = try await ToolRegistry.execute(toolName: name, arguments: args)

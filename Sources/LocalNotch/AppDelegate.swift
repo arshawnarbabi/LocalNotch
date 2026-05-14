@@ -13,12 +13,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var settingsWindow: NSWindow?
     private var updateMenuItem: NSMenuItem?
+    private var agentGlowWindow: AgentGlowWindow?
+    private var agentStateCancellable: AnyCancellable?
+    private var previousAgentState: AgentState = .idle
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         setupMainMenu()
         setupNotch()
         setupStatusItem()
+        setupAgentObserver()
         if !AppSettings.shared.onboardingComplete {
             Task {
                 try? await Task.sleep(for: .milliseconds(600))
@@ -26,6 +30,58 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 await notch?.expand()
             }
         }
+    }
+
+    private func setupAgentObserver() {
+        agentGlowWindow = AgentGlowWindow()
+        agentStateCancellable = AgentRunner.shared.$state
+            .receive(on: RunLoop.main)
+            .sink { [weak self] newState in
+                guard let self else { return }
+                defer { self.previousAgentState = newState }
+                // B → C: task start glow
+                if self.previousAgentState == .idle && newState == .running {
+                    self.agentGlowWindow?.show(variant: .start)
+                }
+                // C → E: task finish glow
+                if self.previousAgentState == .running && newState == .finished {
+                    self.agentGlowWindow?.show(variant: .finish)
+                }
+                // Update menu bar icon based on agent state
+                self.updateMenuBarIcon(state: newState)
+            }
+    }
+
+    private func updateMenuBarIcon(state: AgentState) {
+        guard let button = statusItem?.button else { return }
+        switch state {
+        case .running:
+            button.image = NSImage(systemSymbolName: "sparkles", accessibilityDescription: "LocalNotch — Agent Running")
+        case .clarifying, .approving:
+            button.image = NSImage(systemSymbolName: "sparkles", accessibilityDescription: "LocalNotch — Agent Waiting")
+        case .idle, .finished, .forceStopped, .welcome:
+            button.image = NSImage(systemSymbolName: "sparkles", accessibilityDescription: "LocalNotch")
+        default:
+            button.image = NSImage(systemSymbolName: "sparkles", accessibilityDescription: "LocalNotch")
+        }
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        let agentState = AgentRunner.shared.state
+        guard agentState.isActive else { return .terminateNow }
+
+        let alert = NSAlert()
+        alert.messageText = "Agent is running."
+        alert.informativeText = "Quitting now will stop the current task. Any file operations that have already completed will not be undone. Files moved to Trash will remain in Trash."
+        alert.addButton(withTitle: "Quit Anyway")
+        alert.addButton(withTitle: "Cancel")
+        NSApp.activate(ignoringOtherApps: true)
+        let response = alert.runModal()
+        if response == .alertFirstButtonReturn {
+            AgentRunner.shared.forceStop()
+            return .terminateNow
+        }
+        return .terminateCancel
     }
 
     private func setupNotch() {
@@ -253,14 +309,38 @@ private struct NotchContentView: View {
     }
 }
 
-// Cycles a dot from small to large while the model is responding.
-// Uses Circle() in a fixed frame so vertical position never shifts.
+// Compact notch trailing indicator — shows chat loading dots OR agent state indicator.
 struct ReactiveTypingDots: View {
     @ObservedObject var state: ChatState
+    @ObservedObject private var agentRunner = AgentRunner.shared
     private let sizes: [CGFloat] = [3, 5, 8, 5]
     private let interval = 0.15
 
     var body: some View {
+        ZStack {
+            // Agent state takes priority over chat loading.
+            switch agentRunner.state {
+            case .running, .paused:
+                // White pulsing dot — agent is working
+                agentWorkingDot(color: .white)
+            case .clarifying, .approving:
+                // Yellow pulsing dot — agent needs user attention
+                agentWorkingDot(color: Color(red: 1.0, green: 0.9, blue: 0.3))
+            case .idle, .finished, .forceStopped:
+                // Static mini-orb — in agent mode but no active work
+                PearlescentOrb(size: 10, animated: false)
+                    .frame(width: 16, height: 16)
+                    .transition(.opacity)
+            default:
+                // Normal chat indicators
+                chatIndicator
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: agentRunner.state)
+    }
+
+    @ViewBuilder
+    private var chatIndicator: some View {
         if state.isLoading {
             TimelineView(.periodic(from: .now, by: interval)) { context in
                 let idx = Int(context.date.timeIntervalSince1970 / interval) % sizes.count
@@ -277,5 +357,16 @@ struct ReactiveTypingDots: View {
                 .frame(width: 16, height: 16)
                 .transition(.scale(scale: 0.5).combined(with: .opacity))
         }
+    }
+
+    private func agentWorkingDot(color: Color) -> some View {
+        TimelineView(.periodic(from: .now, by: interval)) { context in
+            let idx = Int(context.date.timeIntervalSince1970 / interval) % sizes.count
+            Circle()
+                .fill(color)
+                .frame(width: sizes[idx], height: sizes[idx])
+                .frame(width: 16, height: 16)
+        }
+        .transition(.opacity)
     }
 }

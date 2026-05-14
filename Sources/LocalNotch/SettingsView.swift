@@ -663,15 +663,31 @@ struct AgentSettingsView: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.white.opacity(0.5))
                 Spacer()
-                HStack(spacing: 4) {
-                    Text("Show all")
-                        .font(.system(size: 10))
-                        .foregroundColor(.white.opacity(0.4))
-                    Toggle("", isOn: $showAllModels)
-                        .toggleStyle(.switch)
-                        .scaleEffect(0.65)
-                        .frame(width: 36)
-                        .tint(Color.white.opacity(0.3))
+                HStack(spacing: 8) {
+                    HStack(spacing: 4) {
+                        Text("Show all")
+                            .font(.system(size: 10))
+                            .foregroundColor(.white.opacity(0.4))
+                        Toggle("", isOn: $showAllModels)
+                            .toggleStyle(.switch)
+                            .scaleEffect(0.65)
+                            .frame(width: 36)
+                            .tint(Color.white.opacity(0.3))
+                    }
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 10, weight: .medium))
+                        Text("Refresh")
+                            .font(.system(size: 10, weight: .medium))
+                    }
+                    .foregroundColor(.white.opacity(0.55))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .modifier(GlassPillModifier())
+                    .overlay(AppKitTapHandler {
+                        ollamaStatus = .loading
+                        Task { await loadState() }
+                    })
                 }
             }
 
@@ -903,8 +919,11 @@ struct AgentSettingsView: View {
         await MainActor.run {
             settings.agentModelToolCallVerified[model] = result
             smokeTestStatus = result ? .passed : .failed
-            if !result && settings.agentModel == model {
-                // Don't auto-clear selection — user may want to try a different model, not lose their choice
+            // Update the persistent gate: agentVerifiedModel matches agentModel only when verified.
+            if result && settings.agentModel == model {
+                settings.agentVerifiedModel = model
+            } else if !result && settings.agentVerifiedModel == model {
+                settings.agentVerifiedModel = ""
             }
         }
     }

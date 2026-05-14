@@ -168,21 +168,23 @@ final class OllamaAPI: Sendable {
 
     func contextLengthFor(model: String) async -> Int? {
         struct ShowRequest: Encodable { let model: String }
-        struct ShowResponse: Decodable {
-            struct ModelInfo: Decodable {
-                let context_length: Int?
-                enum CodingKeys: String, CodingKey { case context_length = "llama.context_length" }
-            }
-            let model_info: ModelInfo?
-        }
         guard let url = URL(string: "http://localhost:11434/api/show") else { return nil }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try? JSONEncoder().encode(ShowRequest(model: model))
         guard let (data, _) = try? await OllamaAPI.statusSession.data(for: req) else { return nil }
-        let resp = try? JSONDecoder().decode(ShowResponse.self, from: data)
-        return resp?.model_info?.context_length
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let modelInfo = json["model_info"] as? [String: Any] else { return nil }
+        // Different model families use different keys (e.g. "llama.context_length", "qwen2.context_length").
+        // Find any key ending in ".context_length" or falling back to "context_length".
+        for key in modelInfo.keys {
+            if key.hasSuffix(".context_length") || key == "context_length" {
+                if let val = modelInfo[key] as? Int { return val }
+                if let val = modelInfo[key] as? Double { return Int(val) }
+            }
+        }
+        return nil
     }
 
     // Sends a minimal noop_test tool probe. Returns true if the model responds with a tool call.

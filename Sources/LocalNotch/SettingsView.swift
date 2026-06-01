@@ -382,71 +382,146 @@ struct ModelOptionRow: View {
 
 struct WebSearchSettingsView: View {
     @ObservedObject private var settings = AppSettings.shared
-    @State private var keyVisible = false
+    @State private var braveKeyVisible = false
+    @State private var tavilyKeyVisible = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
+                // Provider picker
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Brave Search API key")
+                    Text("Search provider")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.white.opacity(0.5))
 
-                    HStack {
-                        Group {
-                            if keyVisible {
-                                TextField("Paste key here", text: $settings.braveSearchAPIKey)
-                            } else {
-                                SecureField("Paste key here", text: $settings.braveSearchAPIKey)
-                            }
+                    Picker("", selection: $settings.searchProvider) {
+                        ForEach(SearchProvider.allCases, id: \.self) { provider in
+                            Text(provider.label).tag(provider)
                         }
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 12))
-                        .foregroundColor(.white)
-                        .tint(.white)
-
-                        Button { keyVisible.toggle() } label: {
-                            Image(systemName: keyVisible ? "eye.slash" : "eye")
-                                .font(.system(size: 12))
-                                .foregroundColor(.white.opacity(0.5))
-                        }
-                        .buttonStyle(.plain)
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 9)
-                    .modifier(GlassPillModifier())
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
                 }
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Free tier: 1,000 queries/month. Requires a credit card on file with Brave.")
-                        .font(.system(size: 11))
-                        .foregroundColor(.white.opacity(0.45))
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    HStack(spacing: 4) {
-                        Text("Get an API key")
+                // Brave key field
+                if settings.searchProvider == .brave || settings.searchProvider == .auto {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Brave Search API key")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(Color(red: 0.4, green: 0.7, blue: 1.0))
-                        Image(systemName: "arrow.up.right")
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundColor(Color(red: 0.4, green: 0.7, blue: 1.0))
+                            .foregroundColor(.white.opacity(0.5))
+
+                        HStack {
+                            Group {
+                                if braveKeyVisible {
+                                    TextField("Paste key here", text: $settings.braveSearchAPIKey)
+                                } else {
+                                    SecureField("Paste key here", text: $settings.braveSearchAPIKey)
+                                }
+                            }
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 12))
+                            .foregroundColor(.white)
+                            .tint(.white)
+
+                            Button { braveKeyVisible.toggle() } label: {
+                                Image(systemName: braveKeyVisible ? "eye.slash" : "eye")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.white.opacity(0.5))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 9)
+                        .modifier(GlassPillModifier())
+
+                        HStack(spacing: 4) {
+                            Text("Get a Brave API key")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(Color(red: 0.4, green: 0.7, blue: 1.0))
+                            Image(systemName: "arrow.up.right")
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundColor(Color(red: 0.4, green: 0.7, blue: 1.0))
+                        }
+                        .overlay(AppKitTapHandler {
+                            NSWorkspace.shared.open(URL(string: "https://api.search.brave.com/register")!)
+                        })
                     }
-                    .overlay(AppKitTapHandler {
-                        NSWorkspace.shared.open(URL(string: "https://api.search.brave.com/register")!)
-                    })
                 }
 
-                Text(settings.braveSearchAPIKey.trimmingCharacters(in: .whitespaces).isEmpty
-                     ? "No key set — web search disabled."
-                     : "Web search enabled.")
+                // Tavily key field
+                if settings.searchProvider == .tavily || settings.searchProvider == .auto {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Tavily API key")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.white.opacity(0.5))
+
+                        HStack {
+                            Group {
+                                if tavilyKeyVisible {
+                                    TextField("Paste key here", text: $settings.tavilyAPIKey)
+                                } else {
+                                    SecureField("Paste key here", text: $settings.tavilyAPIKey)
+                                }
+                            }
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 12))
+                            .foregroundColor(.white)
+                            .tint(.white)
+
+                            Button { tavilyKeyVisible.toggle() } label: {
+                                Image(systemName: tavilyKeyVisible ? "eye.slash" : "eye")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.white.opacity(0.5))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 9)
+                        .modifier(GlassPillModifier())
+
+                        HStack(spacing: 4) {
+                            Text("Get a Tavily API key")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(Color(red: 0.4, green: 0.7, blue: 1.0))
+                            Image(systemName: "arrow.up.right")
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundColor(Color(red: 0.4, green: 0.7, blue: 1.0))
+                        }
+                        .overlay(AppKitTapHandler {
+                            NSWorkspace.shared.open(URL(string: "https://app.tavily.com")!)
+                        })
+                    }
+                }
+
+                Text(webSearchStatusText)
                     .font(.system(size: 11))
                     .foregroundColor(.white.opacity(0.35))
-                    .animation(.easeInOut(duration: 0.2), value: settings.braveSearchAPIKey.isEmpty)
+                    .animation(.easeInOut(duration: 0.2), value: settings.searchProvider)
             }
             .padding(.horizontal, 14)
             .padding(.bottom, 14)
         }
         .scrollIndicators(.hidden)
+    }
+
+    private var webSearchStatusText: String {
+        switch settings.searchProvider {
+        case .brave:
+            return settings.braveSearchAPIKey.trimmingCharacters(in: .whitespaces).isEmpty
+                ? "No Brave key set — web search disabled."
+                : "Web search enabled via Brave."
+        case .tavily:
+            return settings.tavilyAPIKey.trimmingCharacters(in: .whitespaces).isEmpty
+                ? "No Tavily key set — web search disabled."
+                : "Web search enabled via Tavily."
+        case .auto:
+            let hasBrave = !settings.braveSearchAPIKey.trimmingCharacters(in: .whitespaces).isEmpty
+            let hasTavily = !settings.tavilyAPIKey.trimmingCharacters(in: .whitespaces).isEmpty
+            if hasBrave || hasTavily {
+                return "Auto mode — will try available providers with fallback."
+            }
+            return "No API keys set — web search disabled."
+        }
     }
 }
 

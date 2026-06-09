@@ -92,10 +92,12 @@ struct OnboardingView: View {
     }
 
     private func advance() {
-        AppSettings.shared.notchContentHeight = 300
         let next = min(step + 1, totalSteps)
         AppSettings.shared.onboardingStep = next
-        withAnimation(stepSpring) { step = next }
+        withAnimation(stepSpring) {
+            AppSettings.shared.notchContentHeight = 300
+            step = next
+        }
     }
 }
 
@@ -237,8 +239,10 @@ private struct PickTextModelStep: View {
     @State private var availableModels: [String] = []
     @State private var loading = true
     @State private var isOpen = false
+    @State private var copiedInstall = ""
 
     private var canContinue: Bool { !settings.textModelName.isEmpty }
+    private var noModels: Bool { !loading && availableModels.isEmpty }
 
     var body: some View {
         VStack(spacing: 16) {
@@ -253,34 +257,69 @@ private struct PickTextModelStep: View {
             }
             .padding(.horizontal, 24)
 
-            ModelDropdownRow(
-                label: "Text model",
-                selected: settings.textModelName,
-                models: availableModels,
-                isLoading: loading,
-                isOpen: $isOpen,
-                onSelect: {
-                    settings.textModelName = $0
-                    withAnimation(.easeInOut(duration: 0.12)) { isOpen = false }
-                }
-            )
-            .padding(.horizontal, 24)
+            if noModels {
+                noModelsView
+            } else {
+                ModelDropdownRow(
+                    label: "Text model",
+                    selected: settings.textModelName,
+                    models: availableModels,
+                    isLoading: loading,
+                    isOpen: $isOpen,
+                    onSelect: {
+                        settings.textModelName = $0
+                        withAnimation(.easeInOut(duration: 0.12)) { isOpen = false }
+                    }
+                )
+                .padding(.horizontal, 24)
 
-            OnboardingButton(
-                label: "Continue",
-                icon: "arrow.right",
-                disabled: !canContinue
-            ) { onNext() }
+                OnboardingButton(
+                    label: "Continue",
+                    icon: "arrow.right",
+                    disabled: !canContinue
+                ) { onNext() }
+            }
 
             Spacer(minLength: 0)
         }
-        .padding(.top, 56)
+        .padding(.top, 46)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .task { await loadModels() }
+        .onChange(of: noModels) { _, empty in
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
+                AppSettings.shared.notchContentHeight = empty ? 420 : 300
+            }
+        }
         .onChange(of: isOpen) { _, open in
             let listH = CGFloat(max(1, availableModels.count)) * 33 + 20
             withAnimation(.spring(response: 0.45, dampingFraction: open ? 0.68 : 0.82)) {
                 AppSettings.shared.notchContentHeight = open ? max(300, 250 + listH) : 300
+            }
+        }
+    }
+
+    private var noModelsView: some View {
+        VStack(spacing: 14) {
+            VStack(spacing: 6) {
+                Image(systemName: "tray")
+                    .font(.system(size: 22))
+                    .foregroundColor(.white.opacity(0.35))
+                Text("No models found in Ollama.")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.white.opacity(0.7))
+                Text("Open Terminal and run one of these to install:")
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.4))
+            }
+            VStack(spacing: 6) {
+                OnboardingCopyRow(command: "ollama pull gemma3:4b",   note: "fast, 4 GB", copiedCommand: $copiedInstall)
+                OnboardingCopyRow(command: "ollama pull qwen2.5:7b",  note: "good all-rounder, 5 GB", copiedCommand: $copiedInstall)
+                OnboardingCopyRow(command: "ollama pull gemma3:12b",  note: "higher quality, 8 GB+", copiedCommand: $copiedInstall)
+            }
+            .padding(.horizontal, 20)
+            OnboardingButton(label: "Refresh", icon: "arrow.clockwise") {
+                loading = true
+                Task { await loadModels() }
             }
         }
     }
@@ -306,8 +345,11 @@ private struct PickVisionModelStep: View {
     @State private var loading = true
     @State private var isOpen = false
     @State private var textModelIsMultimodal = false
+    @State private var copiedInstall = ""
 
     private var modelNames: [String] { availableModels.map(\.name) }
+    private var noModels: Bool { !loading && !textModelIsMultimodal && availableModels.isEmpty }
+    private var hasModels: Bool { !loading && !textModelIsMultimodal && !availableModels.isEmpty }
 
     private var recommendedModel: String? {
         availableModels.sorted { rankScore($0) > rankScore($1) }.first?.name
@@ -341,6 +383,50 @@ private struct PickVisionModelStep: View {
                         .padding(.horizontal, 24)
                     Spacer()
                 }
+                .transition(.opacity)
+            } else if noModels {
+                VStack(spacing: 16) {
+                    VStack(spacing: 6) {
+                        Text("Vision model")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundColor(.white)
+                        Text("Optional — enables screenshot analysis.")
+                            .font(.system(size: 12))
+                            .foregroundColor(.white.opacity(0.5))
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(.horizontal, 24)
+
+                    VStack(spacing: 14) {
+                        VStack(spacing: 6) {
+                            Image(systemName: "camera.metering.unknown")
+                                .font(.system(size: 22))
+                                .foregroundColor(.white.opacity(0.35))
+                            Text("No vision models found.")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.white.opacity(0.7))
+                            Text("Open Terminal and run one of these to install:")
+                                .font(.system(size: 11))
+                                .foregroundColor(.white.opacity(0.4))
+                        }
+                        VStack(spacing: 6) {
+                            OnboardingCopyRow(command: "ollama pull llama3.2-vision", note: "recommended, 8 GB", copiedCommand: $copiedInstall)
+                            OnboardingCopyRow(command: "ollama pull llava:7b",        note: "lighter, 5 GB",    copiedCommand: $copiedInstall)
+                        }
+                        .padding(.horizontal, 20)
+                        HStack(spacing: 10) {
+                            OnboardingButton(label: "Refresh", icon: "arrow.clockwise") {
+                                loading = true
+                                Task { await loadModels() }
+                            }
+                            OnboardingButton(label: "Skip", icon: "arrow.right") { onNext() }
+                        }
+                    }
+
+                    Spacer(minLength: 0)
+                }
+                .padding(.top, 30)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .transition(.opacity)
             } else {
                 VStack(spacing: 16) {
@@ -392,6 +478,18 @@ private struct PickVisionModelStep: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task { await loadModels() }
+        .onChange(of: noModels) { _, empty in
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
+                AppSettings.shared.notchContentHeight = empty ? 400 : 300
+            }
+        }
+        .onChange(of: hasModels) { _, has in
+            if has {
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+                    AppSettings.shared.notchContentHeight = 300
+                }
+            }
+        }
     }
 
     private func loadModels() async {
@@ -553,8 +651,6 @@ private struct YourNameStep: View {
     }
 }
 
-// MARK: - Step 6: Done
-
 // MARK: - Step 6: Agent Model (optional)
 
 private struct AgentModelStep: View {
@@ -562,96 +658,187 @@ private struct AgentModelStep: View {
     let onSkip: () -> Void
 
     @ObservedObject private var settings = AppSettings.shared
-    @State private var allModels: [String] = []
-    @State private var modelDropdownOpen = false
-    @State private var copiedCommand = ""
+    @State private var agentModels: [String] = []
+    @State private var loading = true
+    @State private var isOpen = false
+    @State private var systemRAMGB: Int = 0
+    @State private var copiedModel = ""
 
-    private let tiers: [(ram: String, model: String)] = [
-        ("8 GB Mac", "deepseek-r1:7b"),
-        ("16 GB (recommended)", "deepseek-r1:14b"),
-        ("32 GB Mac", "qwq:32b")
-    ]
+    private var tooLowRAM: Bool { systemRAMGB > 0 && systemRAMGB < 16 }
+    private var hasModels: Bool  { !agentModels.isEmpty }
+
+    // Recommendations come from the shared AgentModelRecommendations source of
+    // truth (tool-capable, non-nvfp4 qwen3 tiers). Onboarding and Settings both
+    // read from it so they can't drift apart.
+
+    // Best model already installed for detected RAM.
+    private var recommendedInstalled: String? {
+        AgentModelRecommendations.bestInstalled(forRAMGB: systemRAMGB, among: agentModels)
+    }
+
+    // Best model to suggest installing if none are present.
+    private var suggestedInstallModel: String {
+        AgentModelRecommendations.suggestedModel(forRAMGB: systemRAMGB) ?? "qwen3:8b"
+    }
+
+    private var installTiers: [(ram: String, model: String, modelSize: String)] {
+        AgentModelRecommendations.tiers.map { ($0.ramLabel, $0.model, $0.sizeNote) }
+    }
 
     var body: some View {
-        VStack(spacing: 14) {
-            Spacer()
-
+        VStack(spacing: 18) {
             VStack(spacing: 6) {
-                PearlescentOrb(size: 32, animated: true)
-                Text("Agent mode")
+                Text("Agent Mode")
                     .font(.system(size: 18, weight: .medium))
                     .foregroundColor(.white)
-                Text("Optional — skip if you just want to chat.")
+                Text("Let LocalNotch act — move files, organize folders\n— not just answer questions.")
+                    .font(.system(size: 12))
+                    .foregroundColor(.white.opacity(0.5))
+                    .multilineTextAlignment(.center)
+            }
+
+            if loading {
+                ProgressView().tint(.white).scaleEffect(0.8)
+            } else if tooLowRAM {
+                lowRAMView
+            } else if hasModels {
+                dropdownView
+            } else {
+                installInstructionsView
+            }
+
+            OnboardingButton(label: "I'll set it up later", icon: "arrow.right") { onSkip() }
+        }
+        .padding(.horizontal, 4)
+        .frame(maxWidth: .infinity)
+        .animation(.easeInOut(duration: 0.2), value: tooLowRAM)
+        .task { await loadModels() }
+        .onChange(of: loading) { _, isLoading in
+            guard !isLoading else { return }
+            let height: CGFloat = tooLowRAM ? 300 : (hasModels ? 400 : 540)
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
+                AppSettings.shared.notchContentHeight = height
+            }
+        }
+        .onChange(of: isOpen) { _, open in
+            let listH = CGFloat(max(1, agentModels.count)) * 33 + 20
+            withAnimation(.spring(response: 0.45, dampingFraction: open ? 0.68 : 0.82)) {
+                AppSettings.shared.notchContentHeight = open ? max(400, 320 + listH) : 400
+            }
+        }
+    }
+
+    // MARK: Sub-views
+
+    private var dropdownView: some View {
+        VStack(spacing: 12) {
+            ModelDropdownRow(
+                label: "Agent model",
+                selected: settings.agentModel,
+                models: agentModels,
+                isLoading: false,
+                isOpen: $isOpen,
+                onSelect: {
+                    settings.agentModel = $0
+                    withAnimation(.easeInOut(duration: 0.12)) { isOpen = false }
+                },
+                recommended: recommendedInstalled
+            )
+            .padding(.horizontal, 20)
+
+            Text("After selecting, go to Settings → Agent to verify it.")
+                .font(.system(size: 10))
+                .foregroundColor(.white.opacity(0.3))
+                .multilineTextAlignment(.center)
+
+            if !settings.agentModel.isEmpty {
+                OnboardingButton(label: "Continue", icon: "checkmark") { onNext() }
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            }
+        }
+        .animation(.spring(response: 0.28, dampingFraction: 0.72), value: settings.agentModel.isEmpty)
+        .transition(.opacity)
+    }
+
+    private var installInstructionsView: some View {
+        VStack(spacing: 12) {
+            VStack(spacing: 4) {
+                Text("Pick one and run it in Terminal.")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.white.opacity(0.8))
+                Text("You only need to run one — the one marked\n\"For your Mac\" is the best fit for your hardware.")
                     .font(.system(size: 11))
                     .foregroundColor(.white.opacity(0.45))
                     .multilineTextAlignment(.center)
             }
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Agent model lets LocalNotch plan and execute real tasks on your Mac — moving files, organizing folders — using a local reasoning LLM.")
-                    .font(.system(size: 11))
-                    .foregroundColor(.white.opacity(0.6))
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity)
+            VStack(spacing: 6) {
+                ForEach(installTiers, id: \.model) { tier in
+                    let isForThisMac = tier.model == suggestedInstallModel
+                    OnboardingCopyRow(
+                        command: "ollama pull \(tier.model)",
+                        note: "\(tier.ram) · uses \(tier.modelSize) of RAM",
+                        copiedCommand: $copiedModel,
+                        highlight: isForThisMac,
+                        badge: isForThisMac ? "For your Mac" : nil
+                    )
+                }
             }
             .padding(.horizontal, 20)
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Recommended for your Mac")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(.white.opacity(0.4))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                ForEach(tiers, id: \.model) { tier in
-                    HStack(spacing: 8) {
-                        Text(tier.ram)
-                            .font(.system(size: 10))
-                            .foregroundColor(.white.opacity(0.5))
-                        Text(tier.model)
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(.white.opacity(0.85))
-                        Spacer()
-                        let cmd = "ollama pull \(tier.model)"
-                        let copied = copiedCommand == cmd
-                        Text(copied ? "Copied!" : "Copy")
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundColor(copied ? .green : .white.opacity(0.4))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .modifier(GlassPillModifier())
-                            .overlay(AppKitTapHandler {
-                                NSPasteboard.general.clearContents()
-                                NSPasteboard.general.setString(cmd, forType: .string)
-                                copiedCommand = cmd
-                                Task {
-                                    try? await Task.sleep(for: .seconds(2))
-                                    if copiedCommand == cmd { copiedCommand = "" }
-                                }
-                            })
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.05)))
-                }
+            OnboardingButton(label: "Refresh", icon: "arrow.clockwise") {
+                loading = true
+                Task { await loadModels() }
             }
-            .padding(.horizontal, 16)
 
-            Text("You can also set this up later in Settings → Agent.")
+            Text("After installing, tap Refresh.")
                 .font(.system(size: 10))
                 .foregroundColor(.white.opacity(0.3))
                 .multilineTextAlignment(.center)
-
-            HStack(spacing: 10) {
-                OnboardingButton(label: "Skip", icon: "arrow.right") { onSkip() }
-                OnboardingButton(label: "Set up later in Settings", icon: "gearshape") { onSkip() }
-            }
-
-            Spacer()
         }
-        .frame(maxWidth: .infinity)
+        .transition(.opacity)
+    }
+
+    private var lowRAMView: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "memorychip")
+                .font(.system(size: 22))
+                .foregroundColor(.white.opacity(0.35))
+            Text("Your Mac has \(systemRAMGB) GB of RAM.")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.white.opacity(0.75))
+            Text("Agent Mode works best with 16 GB or more.\nWe recommend skipping this step.")
+                .font(.system(size: 12))
+                .foregroundColor(.white.opacity(0.45))
+                .multilineTextAlignment(.center)
+        }
+        .padding(.horizontal, 24)
+        .transition(.opacity)
+    }
+
+    // MARK: Data
+
+    private func loadModels() async {
+        let bytes = ProcessInfo.processInfo.physicalMemory
+        systemRAMGB = Int(bytes / (1024 * 1024 * 1024))
+
+        guard let url = URL(string: "http://localhost:11434/api/tags") else {
+            loading = false; return
+        }
+        do {
+            let (data, _) = try await OllamaAPI.statusSession.data(from: url)
+            let decoded = try JSONDecoder().decode(OllamaTagsResponse.self, from: data)
+            agentModels = decoded.models.filter { $0.isAgentCapable }.map(\.name).sorted()
+            // Auto-select the best model for this Mac if nothing is set yet.
+            if settings.agentModel.isEmpty, let best = recommendedInstalled {
+                settings.agentModel = best
+            }
+        } catch {}
+        loading = false
     }
 }
+
+// MARK: - Step 7: Done
 
 private struct DoneStep: View {
     let onFinish: () -> Void
@@ -679,6 +866,68 @@ private struct DoneStep: View {
 
             Spacer()
         }
+    }
+}
+
+// MARK: - Shared Copy Row (install instructions)
+
+private struct OnboardingCopyRow: View {
+    let command: String
+    let note: String
+    @Binding var copiedCommand: String
+    var highlight: Bool = false
+    var badge: String? = nil
+
+    private var copied: Bool { copiedCommand == command }
+    private let badgeColor = Color(red: 0.76, green: 0.61, blue: 1.00)
+
+    var body: some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 4) {
+                if let badge {
+                    Text(badge)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(badgeColor)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(badgeColor.opacity(0.18), in: Capsule())
+                }
+                Text(command)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.white.opacity(highlight ? 0.85 : 0.5))
+                Text(note)
+                    .font(.system(size: 9))
+                    .foregroundColor(.white.opacity(0.35))
+            }
+            Spacer()
+            HStack(spacing: 4) {
+                Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                    .font(.system(size: 10))
+                Text(copied ? "Copied" : "Copy")
+                    .font(.system(size: 10, weight: .medium))
+            }
+            .foregroundColor(copied ? .green : .white.opacity(0.45))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 7))
+            .overlay(AppKitTapHandler {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(command, forType: .string)
+                copiedCommand = command
+                Task {
+                    try? await Task.sleep(for: .seconds(2))
+                    if copiedCommand == command { copiedCommand = "" }
+                }
+            })
+        }
+        .padding(10)
+        .background(
+            highlight ? Color.white.opacity(0.08) : Color.white.opacity(0.04),
+            in: RoundedRectangle(cornerRadius: 10)
+        )
+        .overlay(
+            highlight ? RoundedRectangle(cornerRadius: 10).stroke(badgeColor.opacity(0.25), lineWidth: 0.5) : nil
+        )
     }
 }
 

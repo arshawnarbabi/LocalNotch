@@ -78,26 +78,31 @@ LocalNotch is a macOS AI assistant that lives in your MacBook's notch. Hover to 
 
 ### Option A — Download (recommended)
 
-1. Download `LocalNotch.zip` from [Releases](https://github.com/s24b/LocalNotch/releases).
+1. Download `LocalNotch.zip` from [Releases](https://github.com/arshawnarbabi/LocalNotch/releases).
 2. Unzip and drag `LocalNotch.app` to your Applications folder.
-3. **Do not double-click to launch.** macOS will block it because the app is ad-hoc signed, not notarized.
-4. To bypass Gatekeeper — the steps differ by macOS version:
-   - **macOS 14 (Sonoma):** Right-click `LocalNotch.app` → **Open** → click **Open** in the dialog. Done.
-   - **macOS 15 (Sequoia) or macOS 26 (Tahoe):** Right-click → Open no longer bypasses Gatekeeper. Instead: attempt to open the app (it will be blocked), then open **System Settings → Privacy & Security**, scroll to the **Security** section at the bottom, and click **Open Anyway**. Confirm your password and click **Open Anyway** again.
-   - **Terminal fallback (works on all versions):** `xattr -dr com.apple.quarantine /Applications/LocalNotch.app`
+3. **The first launch will be blocked** with *"Apple could not verify 'LocalNotch' is free of malware."* That's expected — LocalNotch is ad-hoc signed, not notarized with a paid Apple Developer ID, and Gatekeeper only auto-approves notarized apps for downloaded copies. Two ways past it:
 
-   Either way, you only need to do this once — after that you can launch normally.
-5. When prompted, grant **Screen Recording** permission. This is required to capture screenshots for vision queries.
+   1. **Terminal (recommended).** Move `LocalNotch.app` to `/Applications`, then strip the quarantine flag:
+
+      ```sh
+      xattr -dr com.apple.quarantine /Applications/LocalNotch.app
+      ```
+
+      This is the better route — it also prevents Gatekeeper **App Translocation** (macOS running the app from a random read-only path), which would break the **Screen Recording** permission LocalNotch needs for vision queries. Move the app into `/Applications` *before* its first launch for the same reason.
+   2. **System Settings.** Try to open LocalNotch once (let it get blocked), then go to **System Settings → Privacy & Security**, scroll to the "LocalNotch was blocked" notice, and click **Open Anyway**. (On macOS 15 Sequoia and 26 Tahoe, the old right-click → Open bypass no longer works for unnotarized apps.)
+
+   Either way you only need to do this once — after that LocalNotch launches normally.
+4. When prompted, grant **Screen Recording** permission. This is required to capture screenshots for vision queries.
 
 ### Option B — Build from source
 
 ```bash
-git clone https://github.com/s24b/LocalNotch.git
+git clone https://github.com/arshawnarbabi/LocalNotch.git
 cd LocalNotch
 ./scripts/release.sh
 ```
 
-The script compiles a release binary, assembles a proper `.app` bundle, ad-hoc signs it, and produces `LocalNotch.zip` in the repo root. Unzip and move to Applications, then follow the Gatekeeper bypass steps in [Installation → step 4](#installation) for your macOS version.
+The script compiles a release binary, assembles a proper `.app` bundle, ad-hoc signs it, and produces `LocalNotch.zip` in the repo root. Unzip, move to `/Applications`, then clear quarantine with `xattr -dr com.apple.quarantine /Applications/LocalNotch.app` (see [Option A → step 3](#option-a--download-recommended) for the full Gatekeeper explanation).
 
 See [Building from Source](#building-from-source) for full details.
 
@@ -385,7 +390,7 @@ No telemetry. No analytics. No crash reporting. No servers operated by us.
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/s24b/LocalNotch.git
+git clone https://github.com/arshawnarbabi/LocalNotch.git
 cd LocalNotch
 
 # 2. Build and bundle (recommended)
@@ -399,7 +404,7 @@ cd LocalNotch
 
 # 3. Install
 unzip LocalNotch.zip -d /Applications/
-# See Installation → step 4 for how to bypass Gatekeeper on first launch (differs by macOS version)
+xattr -dr com.apple.quarantine /Applications/LocalNotch.app   # clear Gatekeeper quarantine (see Option A → step 3)
 ```
 
 Or, if you only want the binary without a zip:
@@ -486,22 +491,24 @@ Services:
 
 ## Known Limitations
 
-These are documented accepted limitations for the v0.1 beta.
+These are documented accepted limitations for the v0.2.0-beta release.
 
 | Limitation | Notes |
 |---|---|
 | **Text and image input only** | No voice, audio, file, or PDF attachments. Image input is via the in-app screenshot button only. |
 | **Single-display capture** | The screenshot button captures only the main display. |
 | **No conversation persistence** | Chat history lives in memory. Quitting the app loses it. |
-| **No auto-update** | Check [Releases](https://github.com/s24b/LocalNotch/releases) manually. |
+| **No auto-update** | Check [Releases](https://github.com/arshawnarbabi/LocalNotch/releases) manually. |
 | **Screen Recording awareness prompt** | macOS 15.0 (Sequoia) re-prompts for Screen Recording permission approximately once a month for non-notarized apps. macOS 15.1 and later (including macOS 26 Tahoe) reduced this further — prompts become less frequent the more regularly you use the app. Persistent prompts on every capture were fixed in v0.1.1-beta by stabilizing the app's signing identity; occasional macOS awareness prompts remain a system policy for non-notarized apps. |
 | **Apple Silicon only** | Intel Macs are not supported. |
 | **Localhost Ollama only** | Remote or custom-URL Ollama instances are not supported in v0.1. |
 | **API key in UserDefaults** | The Brave Search API key is stored in `UserDefaults`, not in Keychain. It is stored locally on your machine and never transmitted anywhere. |
 | **Response text is not selectable** | AI responses are rendered via MarkdownUI using SwiftUI `Text` views without `.textSelection(.enabled)`. You cannot highlight or copy text from a response in v0.1. |
-| **Reasoning tokens suppressed** | All Ollama requests are sent with `think: false`. Models that support chain-of-thought reasoning (QwQ, DeepSeek-R1, etc.) will not emit reasoning/thinking tokens — only the final answer. |
+| **Chat reasoning tokens suppressed** | Regular *chat* requests are sent with `think: false` (final answer only). *Agent Mode* runs with `think: true` so the reasoning model can plan its tool use; its reasoning trace is hidden by default and can be revealed via **Settings → Agent**. |
 | **Weather is Fahrenheit only** | Temperature values from wttr.in are displayed in °F. There is no Celsius toggle in v0.1. |
-| **Agent Mode: file-system only** | The agent can only interact with the local file system and run shell commands. It cannot browse the web, call external APIs, or control other apps in v0.2. |
+| **Agent Mode: file-system only** | The agent works only with the local file system (read, write, move, copy, rename, create, delete, search). It cannot run shell commands, browse the web, call external APIs, or control other apps. |
+| **Agent Mode: may miss an item on large multi-file tasks** | On tasks spanning many files, the local reasoning model occasionally acts on a subset (e.g. 3 of 4) and reports completion. Spot-check the agent's work on big batches; a more capable model reduces this. |
+| **Agent Mode: auto-approve bypasses prompts** | The optional *Auto-approve* toggle (**Settings → Agent**, off by default) lets the agent perform destructive and bulk actions without asking. Combined with *no undo* above, enable it deliberately. |
 | **Agent Mode: no undo** | File operations (write, move, delete) performed by the agent are not undone when you force-stop. Deleted files are moved to Trash; other operations are permanent. |
 | **Agent Mode: no multi-step rollback** | If a task fails mid-way, previously completed steps are not rolled back. Review the Actions tab to see what was completed before the failure. |
 | **Agent Mode: single active task** | Only one agent task can run at a time. Starting a new task while one is in progress is a no-op; force-stop the current task first. |
@@ -511,13 +518,18 @@ These are documented accepted limitations for the v0.1 beta.
 
 ## FAQ & Troubleshooting
 
-### "The application cannot be opened" / "cannot be opened because the developer cannot be verified"
+### "Apple could not verify…" / "cannot be opened because the developer cannot be verified"
 
-This is Gatekeeper blocking an ad-hoc-signed app. **Do not double-click.** The bypass steps differ by macOS version:
+This is Gatekeeper blocking a downloaded app that's ad-hoc signed and not notarized (a paid Apple Developer ID would be needed to make this prompt disappear). It's expected — **don't just double-click.** Two ways past it:
 
-- **macOS 14 (Sonoma):** Right-click `LocalNotch.app` → **Open** → click **Open** in the dialog.
-- **macOS 15 (Sequoia) or macOS 26 (Tahoe):** Attempt to open the app (it will be blocked), then go to **System Settings → Privacy & Security**, scroll to the **Security** section, and click **Open Anyway**. Confirm your password and click **Open Anyway** again.
-- **Terminal fallback (any version):** `xattr -dr com.apple.quarantine /Applications/LocalNotch.app`
+1. **Terminal (recommended).** Move `LocalNotch.app` into `/Applications`, then clear the quarantine flag:
+
+   ```sh
+   xattr -dr com.apple.quarantine /Applications/LocalNotch.app
+   ```
+
+   This also prevents **App Translocation** — macOS running a quarantined app from a random read-only path, which would break LocalNotch's **Screen Recording** permission. (Move the app to `/Applications` *before* first launch for the same reason.)
+2. **System Settings.** Try to open it once (let it get blocked), then go to **System Settings → Privacy & Security**, find the "LocalNotch was blocked" notice, and click **Open Anyway**. On macOS 15 Sequoia and 26 Tahoe the old right-click → Open trick no longer works for unnotarized apps.
 
 You only need to do this once.
 

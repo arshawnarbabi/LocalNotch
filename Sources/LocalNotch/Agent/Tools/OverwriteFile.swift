@@ -2,7 +2,7 @@ import Foundation
 
 struct OverwriteFile: AgentTool {
     static let name = "overwrite_file"
-    static let description = "Replace the entire contents of an existing text file with new content. Creates the file if it does not exist. Always requires user approval — do not call this without a [NEEDS_APPROVAL] response from the user."
+    static let description = "Write the file at `path`. Creates a new file if it does not exist, otherwise replaces existing contents. Always requires user approval — do not call this without a [NEEDS_APPROVAL] response from the user."
     static let riskLevel: RiskLevel = .destructive
 
     static let parameterSchema: [String: Any] = [
@@ -19,7 +19,7 @@ struct OverwriteFile: AgentTool {
               let content = arguments["content"] as? String else {
             return .fail("Missing required arguments: path, content")
         }
-        let path = NSString(string: rawPath).expandingTildeInPath
+        let path = (NSString(string: rawPath).expandingTildeInPath as NSString).standardizingPath
         let fm = FileManager.default
 
         let parent = (path as NSString).deletingLastPathComponent

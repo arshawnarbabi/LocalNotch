@@ -19,8 +19,8 @@ struct CopyFile: AgentTool {
               let rawTo = arguments["to"] as? String else {
             return .fail("Missing required arguments: from, to")
         }
-        let from = NSString(string: rawFrom).expandingTildeInPath
-        let to = NSString(string: rawTo).expandingTildeInPath
+        let from = (NSString(string: rawFrom).expandingTildeInPath as NSString).standardizingPath
+        let to = (NSString(string: rawTo).expandingTildeInPath as NSString).standardizingPath
         let fm = FileManager.default
 
         guard fm.fileExists(atPath: from) else { return .fail("Source does not exist: \(rawFrom)") }

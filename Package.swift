@@ -14,6 +14,9 @@ let package = Package(
             dependencies: [
                 .product(name: "DynamicNotchKit", package: "DynamicNotchKit"),
                 .product(name: "MarkdownUI", package: "swift-markdown-ui"),
+            ],
+            resources: [
+                .process("Shaders/Pearlescent.metal")
             ]
         )
     ]

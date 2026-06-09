@@ -17,7 +17,7 @@ struct CreateFolder: AgentTool {
         guard let rawPath = arguments["path"] as? String else {
             return .fail("Missing required argument: path")
         }
-        let path = NSString(string: rawPath).expandingTildeInPath
+        let path = (NSString(string: rawPath).expandingTildeInPath as NSString).standardizingPath
         let fm = FileManager.default
 
         if fm.fileExists(atPath: path) {

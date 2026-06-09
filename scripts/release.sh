@@ -28,6 +28,20 @@ if [ ! -f "$BINARY" ]; then
   exit 1
 fi
 
+# Compile Metal shaders into default.metallib (optional — requires Metal Toolchain component).
+echo "==> Compiling Metal shaders"
+METAL_SRC="$REPO_ROOT/Sources/LocalNotch/Shaders/Pearlescent.metal"
+METAL_AIR="/tmp/LocalNotch_Pearlescent.air"
+METAL_LIB="/tmp/LocalNotch_default.metallib"
+if xcrun -sdk macosx metal -c "$METAL_SRC" -o "$METAL_AIR" 2>/dev/null && \
+   xcrun -sdk macosx metallib "$METAL_AIR" -o "$METAL_LIB" 2>/dev/null; then
+  METAL_OK=1
+  echo "    Metal shaders compiled."
+else
+  METAL_OK=0
+  echo "    Metal Toolchain not available — skipping shader compilation (install via Xcode → Components)."
+fi
+
 # Assemble .app bundle
 echo "==> Assembling $APP_NAME.app"
 rm -rf "$STAGING"
@@ -36,6 +50,9 @@ mkdir -p "$APP_BUNDLE/Contents/Resources"
 
 cp "$BINARY" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 cp "$REPO_ROOT/Resources/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
+if [ "${METAL_OK:-0}" = "1" ]; then
+  cp "$METAL_LIB" "$APP_BUNDLE/Contents/Resources/default.metallib"
+fi
 
 # Write Info.plist with current version
 cat > "$APP_BUNDLE/Contents/Info.plist" << PLIST

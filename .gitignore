@@ -19,3 +19,7 @@ DerivedData/
 .DS_Store
 plan.md
 *.zip
+
+# internal notes / personal assets — not for the public repo
+scan.md
+linkedinimages/

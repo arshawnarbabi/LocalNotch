@@ -2,9 +2,17 @@ import Foundation
 
 struct ListDirectory: AgentTool {
     static let name = "list_directory"
-    static let description = "List files and folders at a path. Returns names, types, and sizes. Hidden files excluded by default."
+    static let description = "List files and folders at a path. Returns each entry's name, type, size, and last-modified date — enough to rank by recency or size in ONE call (no need to get_file_info each file). Hidden files excluded by default."
     static let riskLevel: RiskLevel = .readonly
     static let maxEntries = 500
+
+    // Deterministic short timestamp for listings (POSIX locale so it doesn't vary by user settings).
+    static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd HH:mm"
+        return f
+    }()
 
     static let parameterSchema: [String: Any] = [
         "type": "object",
@@ -19,18 +27,18 @@ struct ListDirectory: AgentTool {
         guard let rawPath = arguments["path"] as? String else {
             return .fail("Missing required argument: path")
         }
-        let path = NSString(string: rawPath).expandingTildeInPath
+        let path = (NSString(string: rawPath).expandingTildeInPath as NSString).standardizingPath
         let includeHidden = arguments["includeHidden"] as? Bool ?? false
 
         let fm = FileManager.default
         guard fm.fileExists(atPath: path) else {
-            return .fail("Path does not exist: \(rawPath)")
+            return .fail("Path does not exist: \(rawPath). List its parent folder or use search_files to find the right path.")
         }
 
         var isDir: ObjCBool = false
         fm.fileExists(atPath: path, isDirectory: &isDir)
         guard isDir.boolValue else {
-            return .fail("Path is not a directory: \(rawPath)")
+            return .fail("Path is not a directory: \(rawPath). It's a file — use read_file or get_file_info instead.")
         }
 
         let contents: [String]
@@ -48,13 +56,15 @@ struct ListDirectory: AgentTool {
         var lines: [String] = []
         for name in slice {
             let full = (path as NSString).appendingPathComponent(name)
+            let attrs = try? fm.attributesOfItem(atPath: full)
+            let mtime = (attrs?[.modificationDate] as? Date).map { dateFormatter.string(from: $0) } ?? "—"
             var entryIsDir: ObjCBool = false
             fm.fileExists(atPath: full, isDirectory: &entryIsDir)
             if entryIsDir.boolValue {
-                lines.append("[DIR]  \(name)/")
+                lines.append("[DIR]  \(name)/  (modified \(mtime))")
             } else {
-                let size = (try? fm.attributesOfItem(atPath: full)[.size] as? Int) ?? 0
-                lines.append("[FILE] \(name)  (\(formatBytes(size)))")
+                let size = (attrs?[.size] as? Int) ?? 0
+                lines.append("[FILE] \(name)  (\(formatBytes(size)), modified \(mtime))")
             }
         }
 

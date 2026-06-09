@@ -19,15 +19,17 @@ struct MoveFile: AgentTool {
               let rawTo = arguments["to"] as? String else {
             return .fail("Missing required arguments: from, to")
         }
-        let from = NSString(string: rawFrom).expandingTildeInPath
-        let to = NSString(string: rawTo).expandingTildeInPath
+        let from = (NSString(string: rawFrom).expandingTildeInPath as NSString).standardizingPath
+        let to = (NSString(string: rawTo).expandingTildeInPath as NSString).standardizingPath
         let fm = FileManager.default
 
-        guard fm.fileExists(atPath: from) else { return .fail("Source does not exist: \(rawFrom)") }
+        guard fm.fileExists(atPath: from) else {
+            return .fail("Source does not exist: \(rawFrom). List its parent folder or use search_files to find the correct path.")
+        }
 
         let toParent = (to as NSString).deletingLastPathComponent
         guard fm.fileExists(atPath: toParent) else {
-            return .fail("Destination directory does not exist: \(toParent)")
+            return .fail("Destination directory does not exist: \(toParent). Call create_folder on it first, then retry the move.")
         }
 
         if fm.fileExists(atPath: to) {

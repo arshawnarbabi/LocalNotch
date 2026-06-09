@@ -11,8 +11,8 @@ struct ChatView: View {
     @State private var inputText = ""
     @State private var isInputExpanded = false
     @State private var isHoveringInput = false
+    @State private var isHoveringInputRow = false
     @State private var showingHistory = false
-    @State private var isInAgentMode = false
     @State private var hoveringAgentBtn = false
     @State private var hoverExitTask: Task<Void, Never>?
     @State private var hoveringReset = false
@@ -30,6 +30,17 @@ struct ChatView: View {
 
     @FocusState private var inputFocused: Bool
     @Namespace private var pillNS
+    @Namespace private var morphNS
+    @State private var agentShowingHistory = false
+    @State private var agentInputText = ""
+    @State private var agentInputExpanded = false
+    @FocusState private var agentInputFocused: Bool
+    @State private var agentHoveringLeft = false
+    @State private var agentHoveringKill = false
+    @State private var agentHoveringReset = false
+    @State private var agentHoveringHistory = false
+    @State private var isHoveringAgentInputZone = false
+    @State private var agentHoverExitTask: Task<Void, Never>?
 
     private let springAnim = Animation.spring(response: 0.42, dampingFraction: 0.72)
 
@@ -47,28 +58,51 @@ struct ChatView: View {
     }
 
     var body: some View {
+        VStack(spacing: 0) {
+            contentStack
+            sharedInputBar
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var contentStack: some View {
         ZStack {
             if !settings.onboardingComplete {
                 OnboardingView()
                     .transition(.opacity.combined(with: .scale(scale: 0.97)))
-            } else if isInAgentMode {
-                AgentModeView(onExit: { withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) { isInAgentMode = false } })
-                    .transition(.opacity.combined(with: .scale(scale: 0.97)))
+            } else if agentRunner.isShowingAgentView {
+                AgentModeView(
+                    onExit: { withAnimation(springAnim) { agentRunner.isShowingAgentView = false } },
+                    showingHistory: $agentShowingHistory
+                )
+                .transition(.opacity.combined(with: .scale(scale: 0.985, anchor: .top)))
             } else if showingHistory {
                 HistoryView(history: state.chatHistory) { showingHistory = false }
                     .transition(.opacity.combined(with: .scale(scale: 0.97)))
             } else {
-                VStack(spacing: 0) {
-                    contentArea
-                    inputArea
-                }
-                .transition(.opacity.combined(with: .scale(scale: 0.97)))
+                contentArea
+                    .transition(.opacity.combined(with: .scale(scale: 0.985, anchor: .top)))
             }
         }
-        .animation(.spring(response: 0.38, dampingFraction: 0.82), value: settings.onboardingComplete)
-        .animation(.spring(response: 0.38, dampingFraction: 0.82), value: isInAgentMode)
-        .animation(.spring(response: 0.38, dampingFraction: 0.82), value: showingHistory)
+        .animation(springAnim, value: settings.onboardingComplete)
+        .animation(springAnim, value: agentRunner.isShowingAgentView)
+        .animation(springAnim, value: showingHistory)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var sharedInputBar: some View {
+        ZStack {
+            if agentRunner.isShowingAgentView {
+                agentInputBar
+                    .transition(.opacity.animation(.spring(response: 0.32, dampingFraction: 0.82)))
+            } else if settings.onboardingComplete && !showingHistory {
+                inputArea
+                    .transition(.opacity.animation(.spring(response: 0.32, dampingFraction: 0.82)))
+            }
+        }
+        .animation(springAnim, value: agentRunner.isShowingAgentView)
+        .animation(springAnim, value: showingHistory)
+        .animation(springAnim, value: settings.onboardingComplete)
     }
 
     // MARK: - Content area
@@ -203,6 +237,7 @@ struct ChatView: View {
                     maxWidth: isInputExpanded ? .infinity : pillCollapsedWidth
                 )
                 .modifier(GlassPillModifier())
+                .matchedGeometryEffect(id: "inputPill", in: morphNS)
                 .background(
                     AlwaysActiveHoverDetector { hovering in
                         isHoveringInput = hovering
@@ -210,19 +245,8 @@ struct ChatView: View {
                             hoverExitTask?.cancel()
                             hoverExitTask = nil
                             withAnimation(springAnim) { isInputExpanded = true }
-                        } else {
-                            hoverExitTask?.cancel()
-                            hoverExitTask = Task {
-                                try? await Task.sleep(nanoseconds: 200_000_000)
-                                guard !Task.isCancelled, !isHoveringInput, !hoveringCapture else { return }
-                                await MainActor.run {
-                                    if inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                                        && !inputFocused && state.capturedImage == nil && !state.isCapturing {
-                                        withAnimation(springAnim) { isInputExpanded = false }
-                                    }
-                                }
-                            }
                         }
+                        // Collapse is handled by the outer row detector, not here.
                     }
                 )
 
@@ -242,6 +266,297 @@ struct ChatView: View {
         .animation(springAnim, value: isInputExpanded)
         .padding(.bottom, 10)
         .padding(.top, 4)
+        // Outer-zone collapse detector covers the full bar (spheres + pill + buttons).
+        // Putting it here prevents chitter when the mouse crosses between elements.
+        .background(
+            AlwaysActiveHoverDetector { hovering in
+                isHoveringInputRow = hovering
+                if !hovering {
+                    hoverExitTask?.cancel()
+                    hoverExitTask = Task {
+                        try? await Task.sleep(nanoseconds: 350_000_000)
+                        guard !Task.isCancelled, !isHoveringInputRow, !inputFocused else { return }
+                        await MainActor.run {
+                            if inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                && !inputFocused && state.capturedImage == nil && !state.isCapturing {
+                                withAnimation(springAnim) { isInputExpanded = false }
+                            }
+                        }
+                    }
+                }
+            }
+        )
+    }
+
+    // MARK: - Agent Input Bar
+
+    private var agentInputBar: some View {
+        ZStack(alignment: .center) {
+            if !agentInputExpanded {
+                HStack(spacing: 0) {
+                    agentLeftControl
+                    if agentRunner.state == .running {
+                        agentKillBtn
+                            .padding(.leading, 8)
+                            .transition(.opacity.combined(with: .scale(scale: 0.7)).animation(springAnim))
+                    }
+                    Spacer()
+                    agentResetBtn
+                    agentHistoryBtn
+                        .padding(.leading, 8)
+                }
+                .padding(.horizontal, 10)
+                .transition(.opacity.combined(with: .scale(scale: 0.7)).animation(springAnim))
+            }
+
+            if agentRunner.state != .running {
+                HStack(alignment: .center, spacing: 8) {
+                    agentPillView
+                }
+                .padding(.horizontal, agentInputExpanded ? 10 : sphereSize + 18)
+                .animation(springAnim, value: agentInputExpanded)
+            }
+        }
+        .animation(springAnim, value: agentInputExpanded)
+        .padding(.bottom, 10)
+        .padding(.top, 4)
+        // Outer-zone collapse detector covers full agent bar width including sphere buttons.
+        .background(
+            AlwaysActiveHoverDetector { hovering in
+                isHoveringAgentInputZone = hovering
+                if !hovering {
+                    agentHoverExitTask?.cancel()
+                    agentHoverExitTask = Task {
+                        try? await Task.sleep(nanoseconds: 350_000_000)
+                        guard !Task.isCancelled, !isHoveringAgentInputZone, !agentInputFocused else { return }
+                        await MainActor.run {
+                            if agentInputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !agentInputFocused {
+                                withAnimation(springAnim) { agentInputExpanded = false }
+                            }
+                        }
+                    }
+                }
+            }
+        )
+        .onChange(of: agentRunner.state) { _, newState in
+            handleAgentStateChange(newState)
+        }
+        .onChange(of: agentRunner.isShowingAgentView) { _, isShowing in
+            if isShowing {
+                agentInputExpanded = true
+                agentInputText = ""
+                // (Model preload is handled by AppDelegate's debounced setAgentModeActive on the
+                // .agentModeEntered notification — no warmUp here, to avoid un-debounced churn.)
+            }
+        }
+    }
+
+    private var agentLeftControl: some View {
+        Group {
+            switch agentRunner.state {
+            case .idle, .welcome:
+                agentSphereButton(icon: "xmark") { performAgentExit() }
+            case .running:
+                agentSphereButton(icon: "pause.fill") { agentRunner.pause() }
+            case .paused:
+                agentSphereButton(icon: "play.fill") { agentRunner.resume() }
+            case .finished, .forceStopped:
+                agentSphereButton(icon: "xmark") { performAgentExit() }
+            case .clarifying, .approving:
+                // The agent is waiting for a typed reply (not paused). Show a reply
+                // affordance, and tapping it focuses the input so it's obvious how to proceed.
+                PulsingPlayButton(icon: "text.bubble.fill") {
+                    withAnimation(springAnim) { agentInputExpanded = true }
+                    agentInputFocused = true
+                }
+            }
+        }
+    }
+
+    private func agentSphereButton(icon: String, action: @escaping () -> Void) -> some View {
+        Image(systemName: icon)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundColor(.white.opacity(agentHoveringLeft ? 1.0 : 0.75))
+            .frame(width: sphereSize, height: sphereSize)
+            .modifier(GlassSphereModifier())
+            .scaleEffect(agentHoveringLeft ? 1.14 : 1.0)
+            .brightness(agentHoveringLeft ? 0.12 : 0)
+            .animation(.spring(response: 0.25, dampingFraction: 0.68), value: agentHoveringLeft)
+            .background(AlwaysActiveHoverDetector { agentHoveringLeft = $0 })
+            .overlay(AppKitTapHandler { action() })
+    }
+
+    private var agentKillBtn: some View {
+        Image(systemName: "xmark")
+            .font(.system(size: 11, weight: .medium))
+            .foregroundColor(.white.opacity(agentHoveringKill ? 1.0 : 0.75))
+            .frame(width: sphereSize, height: sphereSize)
+            .modifier(GlassSphereModifier())
+            .scaleEffect(agentHoveringKill ? 1.14 : 1.0)
+            .brightness(agentHoveringKill ? 0.12 : 0)
+            .animation(.spring(response: 0.25, dampingFraction: 0.68), value: agentHoveringKill)
+            .background(AlwaysActiveHoverDetector { agentHoveringKill = $0 })
+            .overlay(AppKitTapHandler { agentRunner.forceStop() })
+    }
+
+    private var agentResetBtn: some View {
+        let active = agentRunner.state == .running || agentRunner.state == .paused
+            || agentRunner.state == .clarifying || agentRunner.state == .approving
+        return Image(systemName: "arrow.counterclockwise")
+            .font(.system(size: 11, weight: .medium))
+            .foregroundColor(.white.opacity(active ? 0.25 : (agentHoveringReset ? 1.0 : 0.75)))
+            .frame(width: sphereSize, height: sphereSize)
+            .modifier(GlassSphereModifier())
+            .scaleEffect(agentHoveringReset && !active ? 1.14 : 1.0)
+            .brightness(agentHoveringReset && !active ? 0.12 : 0)
+            .animation(.spring(response: 0.25, dampingFraction: 0.68), value: agentHoveringReset)
+            .background(AlwaysActiveHoverDetector { agentHoveringReset = $0 })
+            .overlay(AppKitTapHandler { if !active { agentRunner.resetAgentConversation() } })
+    }
+
+    private var agentHistoryBtn: some View {
+        Image(systemName: "clock.arrow.trianglehead.counterclockwise.rotate.90")
+            .font(.system(size: 11, weight: .medium))
+            .foregroundColor(.white.opacity(agentHoveringHistory ? 1.0 : 0.75))
+            .frame(width: sphereSize, height: sphereSize)
+            .modifier(GlassSphereModifier())
+            .scaleEffect(agentHoveringHistory ? 1.14 : 1.0)
+            .brightness(agentHoveringHistory ? 0.12 : 0)
+            .animation(.spring(response: 0.25, dampingFraction: 0.68), value: agentHoveringHistory)
+            .background(AlwaysActiveHoverDetector { agentHoveringHistory = $0 })
+            .overlay(AppKitTapHandler { agentShowingHistory = true })
+    }
+
+    private var agentPillView: some View {
+        ZStack {
+            if !agentInputExpanded {
+                HStack(spacing: 5) {
+                    Image(systemName: "text.bubble")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.white.opacity(0.65))
+                    Text(agentPillPlaceholder)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.white.opacity(0.65))
+                        .lineLimit(1)
+                }
+                .transition(.opacity.animation(.easeOut(duration: 0.18)))
+            } else {
+                HStack(spacing: 0) {
+                    ZStack(alignment: .leading) {
+                        if agentInputText.isEmpty {
+                            Text(agentPillPlaceholder)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.white.opacity(0.35))
+                                .lineLimit(1)
+                        }
+                        TextField("", text: $agentInputText)
+                            .textFieldStyle(.plain)
+                            .foregroundColor(.white)
+                            .font(.system(size: 13))
+                            .focused($agentInputFocused)
+                            .onSubmit { sendAgentMessage() }
+                            .onChange(of: agentInputFocused) { _, focused in
+                                if !focused && agentInputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isHoveringAgentInputZone {
+                                    agentHoverExitTask?.cancel()
+                                    agentHoverExitTask = Task {
+                                        try? await Task.sleep(nanoseconds: 350_000_000)
+                                        guard !Task.isCancelled, !isHoveringAgentInputZone else { return }
+                                        await MainActor.run {
+                                            if agentInputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !agentInputFocused {
+                                                withAnimation(springAnim) { agentInputExpanded = false }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                    }
+                    Spacer(minLength: 8)
+                    agentSendBtn
+                }
+                .transition(.opacity.animation(.easeIn(duration: 0.18).delay(0.06)))
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, agentInputExpanded ? 9 : 7)
+        .frame(
+            minWidth: agentInputExpanded ? 0 : pillCollapsedWidth,
+            maxWidth: agentInputExpanded ? .infinity : pillCollapsedWidth
+        )
+        .modifier(GlassPillModifier())
+        .matchedGeometryEffect(id: "inputPill", in: morphNS)
+        // Expand-only: collapse is handled by the outer agentInputBar zone detector.
+        .background(
+            AlwaysActiveHoverDetector { hovering in
+                if hovering { withAnimation(springAnim) { agentInputExpanded = true } }
+            }
+        )
+    }
+
+    private var agentPillPlaceholder: String {
+        switch agentRunner.state {
+        case .idle:        return "Describe a task…"
+        case .paused:      return "Add context (optional)…"
+        case .clarifying, .approving: return "Type a reply…"
+        case .finished, .forceStopped: return "Start another task…"
+        default:           return "Describe a task…"
+        }
+    }
+
+    @ViewBuilder
+    private var agentSendBtn: some View {
+        let enabled = {
+            switch agentRunner.state {
+            case .idle, .paused, .clarifying, .approving, .finished, .forceStopped, .welcome:
+                return !agentInputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            default: return false
+            }
+        }()
+        Button(action: sendAgentMessage) {
+            Image(systemName: "arrow.up")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(.black)
+                .frame(width: 28, height: 28)
+                .background(Circle().fill(.white))
+                .clipShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .modifier(GlassCircleModifier())
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.35)
+    }
+
+    private func sendAgentMessage() {
+        let text = agentInputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        agentInputText = ""
+        withAnimation(springAnim) { agentInputExpanded = false }
+        agentInputFocused = false
+        switch agentRunner.state {
+        case .idle, .finished, .forceStopped, .welcome:
+            agentRunner.startTask(prompt: text)
+        case .paused:
+            agentRunner.resume(withContext: text)
+        case .clarifying, .approving:
+            agentRunner.handleUserResponse(text)
+        default:
+            break
+        }
+    }
+
+    private func handleAgentStateChange(_ state: AgentState) {
+        switch state {
+        case .idle, .paused, .clarifying, .approving, .finished, .forceStopped, .welcome:
+            withAnimation(springAnim) { agentInputExpanded = true; agentInputFocused = false }
+        case .running:
+            agentHoverExitTask?.cancel()
+            withAnimation(springAnim) { agentInputExpanded = false }
+        }
+    }
+
+    private func performAgentExit() {
+        agentRunner.exitAgentMode()
+        NotificationCenter.default.post(name: .agentModeExited, object: nil)
+        withAnimation(springAnim) { agentRunner.isShowingAgentView = false }
     }
 
     // Collapsed: [icon] "Ask anything" — matched geometry source for morph animation
@@ -274,11 +589,11 @@ struct ChatView: View {
                     .focused($inputFocused)
                     .onSubmit { sendMessage() }
                     .onChange(of: inputFocused) { _, focused in
-                        if !focused && inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isHoveringInput {
+                        if !focused && inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isHoveringInputRow {
                             hoverExitTask?.cancel()
                             hoverExitTask = Task {
                                 try? await Task.sleep(nanoseconds: 200_000_000)
-                                guard !Task.isCancelled, !isHoveringInput else { return }
+                                guard !Task.isCancelled, !isHoveringInputRow else { return }
                                 await MainActor.run {
                                     withAnimation(springAnim) { isInputExpanded = false }
                                 }
@@ -380,22 +695,7 @@ struct ChatView: View {
         .frame(width: captureRingSize, height: captureRingSize)
         .background(AlwaysActiveHoverDetector { hovering in
             hoveringCapture = hovering
-            if hovering {
-                hoverExitTask?.cancel()
-                hoverExitTask = nil
-            } else if !isHoveringInput {
-                hoverExitTask?.cancel()
-                hoverExitTask = Task {
-                    try? await Task.sleep(nanoseconds: 200_000_000)
-                    guard !Task.isCancelled, !isHoveringInput, !hoveringCapture else { return }
-                    await MainActor.run {
-                        if inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                            && !inputFocused && state.capturedImage == nil && !state.isCapturing {
-                            withAnimation(springAnim) { isInputExpanded = false }
-                        }
-                    }
-                }
-            }
+            // Collapse is handled by the outer row detector, not here.
         })
         .overlay(AppKitTapHandler(
             action: { captureScreen() },
@@ -425,15 +725,57 @@ struct ChatView: View {
 
     private var agentButton: some View {
         ZStack {
-            PearlescentOrb(size: 30, animated: false)
-                .scaleEffect(hoveringAgentBtn ? 1.1 : 1.0)
-                .brightness(hoveringAgentBtn ? 0.12 : 0)
-                .animation(.spring(response: 0.22, dampingFraction: 0.65), value: hoveringAgentBtn)
+            // Static frozen-orb gradient: lightened orb palette colors arranged like a
+            // noise snapshot — blue top-left, purple center, pink/warm bottom-right.
+            if #available(macOS 15, *) {
+                MeshGradient(
+                    width: 3, height: 3,
+                    points: [
+                        [0.0, 0.0], [0.5, 0.0], [1.0, 0.0],
+                        [0.0, 0.5], [0.5, 0.5], [1.0, 0.5],
+                        [0.0, 1.0], [0.5, 1.0], [1.0, 1.0],
+                    ],
+                    colors: [
+                        Color(red: 0.59, green: 0.75, blue: 0.92), // #4C9CFF –0.08
+                        Color(red: 0.66, green: 0.64, blue: 0.92), // #657EFF –0.08
+                        Color(red: 0.76, green: 0.60, blue: 0.92), // #A45BFF –0.08
+                        Color(red: 0.60, green: 0.72, blue: 0.92), // #2390F7 –0.08
+                        Color(red: 0.80, green: 0.62, blue: 0.92), // #C35CF9 –0.08
+                        Color(red: 0.92, green: 0.62, blue: 0.80), // #E768B0 –0.08
+                        Color(red: 0.92, green: 0.78, blue: 0.54), // #F3B229 –0.08
+                        Color(red: 0.92, green: 0.64, blue: 0.68), // #F56A7C –0.08
+                        Color(red: 0.82, green: 0.60, blue: 0.92), // #8A6FFF –0.08
+                    ]
+                )
+                .clipShape(Circle())
+            } else {
+                AngularGradient(
+                    stops: [
+                        .init(color: Color(red: 0.59, green: 0.75, blue: 0.92), location: 0.00),
+                        .init(color: Color(red: 0.76, green: 0.60, blue: 0.92), location: 0.28),
+                        .init(color: Color(red: 0.92, green: 0.62, blue: 0.80), location: 0.55),
+                        .init(color: Color(red: 0.92, green: 0.78, blue: 0.54), location: 0.80),
+                        .init(color: Color(red: 0.59, green: 0.75, blue: 0.92), location: 1.00),
+                    ],
+                    center: .center
+                )
+                .clipShape(Circle())
+            }
+
+            Image(systemName: "sparkles")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(.white)
+                .shadow(color: .white.opacity(0.7), radius: 3)
         }
-        .frame(width: 46, height: 46)
+        .frame(width: captureButtonSize, height: captureButtonSize)
+        .clipShape(Circle())
+        .modifier(GlassSphereModifier())
+        .scaleEffect(hoveringAgentBtn ? 1.08 : 1.0)
+        .animation(.spring(response: 0.22, dampingFraction: 0.65), value: hoveringAgentBtn)
         .background(AlwaysActiveHoverDetector { hoveringAgentBtn = $0 })
         .overlay(AppKitTapHandler {
-            withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) { isInAgentMode = true }
+            agentRunner.isShowingAgentView = true
+            NotificationCenter.default.post(name: .agentModeEntered, object: nil)
         })
     }
 

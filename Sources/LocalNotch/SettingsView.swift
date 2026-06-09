@@ -629,6 +629,7 @@ struct AgentSettingsView: View {
                 modelPicker
                 smokeTestRow
                 reasoningToggle
+                autoApproveToggle
                 allowedPathsSection
                 ramHelpText
             }
@@ -773,15 +774,61 @@ struct AgentSettingsView: View {
         .modifier(GlassPillModifier())
     }
 
+    private var autoApproveToggle: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 5) {
+                    Text("Auto-approve actions")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.white)
+                    if settings.agentAutoApprove {
+                        Text("BYPASSES PROMPTS")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundColor(Color(red: 1.0, green: 0.55, blue: 0.3))
+                            .padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(Capsule().fill(Color(red: 1.0, green: 0.55, blue: 0.3).opacity(0.18)))
+                    }
+                }
+                Text("Run deletes, overwrites & bulk moves without asking. Use with caution.")
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.4))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            Toggle("", isOn: $settings.agentAutoApprove)
+                .toggleStyle(.switch)
+                .scaleEffect(0.75)
+                .tint(Color(red: 1.0, green: 0.55, blue: 0.3))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .modifier(GlassPillModifier())
+    }
+
     private var allowedPathsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Allowed paths for writes")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(.white.opacity(0.5))
-            Text("Writes inside these paths are autonomous. Writes elsewhere require approval.")
-                .font(.system(size: 10))
-                .foregroundColor(.white.opacity(0.35))
-                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Text("Write-allowed paths")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white.opacity(0.5))
+                Spacer()
+                Text("Reset")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(.white.opacity(0.4))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .modifier(GlassPillModifier())
+                    .overlay(AppKitTapHandler { resetAllowedPaths() })
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Reads are always unrestricted — the agent can read any file your user account can access.")
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.35))
+                Text("Writes inside the paths below are autonomous. Writes anywhere else always prompt for approval.")
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.35))
+            }
+            .fixedSize(horizontal: false, vertical: true)
 
             VStack(spacing: 4) {
                 ForEach(settings.agentAllowedPaths, id: \.self) { path in
@@ -811,6 +858,14 @@ struct AgentSettingsView: View {
             }
 
             HStack(spacing: 6) {
+                // Folder picker
+                Image(systemName: "folder.badge.plus")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white.opacity(0.6))
+                    .frame(width: 30, height: 30)
+                    .modifier(GlassPillModifier())
+                    .overlay(AppKitTapHandler { browseForPath() })
+
                 TextField("Add path (e.g. ~/Projects)", text: $customPathDraft)
                     .textFieldStyle(.plain)
                     .font(.system(size: 11, design: .monospaced))
@@ -819,6 +874,7 @@ struct AgentSettingsView: View {
                     .padding(.horizontal, 10)
                     .padding(.vertical, 7)
                     .modifier(GlassPillModifier())
+                    .onSubmit { addCustomPath() }
 
                 Image(systemName: "plus")
                     .font(.system(size: 11, weight: .semibold))
@@ -835,16 +891,14 @@ struct AgentSettingsView: View {
             Text("Recommended models")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(.white.opacity(0.5))
-            ForEach([
-                ("8 GB Mac", "deepseek-r1:7b"),
-                ("16 GB Mac (recommended)", "deepseek-r1:14b"),
-                ("32 GB Mac", "qwq:32b")
-            ], id: \.0) { label, model in
+            let recommendedModel = AgentModelRecommendations.tier(forRAMGB: AgentModelRecommendations.systemRAMGB)?.model
+            ForEach(AgentModelRecommendations.tiers, id: \.model) { tier in
+                let isRecommended = tier.model == recommendedModel
                 HStack(spacing: 6) {
-                    Text(label + ":")
+                    Text(tier.ramLabel + (isRecommended ? " (recommended)" : "") + ":")
                         .font(.system(size: 10))
                         .foregroundColor(.white.opacity(0.35))
-                    Text(model)
+                    Text(tier.model)
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(.white.opacity(0.55))
                     Spacer()
@@ -853,7 +907,7 @@ struct AgentSettingsView: View {
                         .foregroundColor(.white.opacity(0.3))
                         .overlay(AppKitTapHandler {
                             NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString("ollama pull \(model)", forType: .string)
+                            NSPasteboard.general.setString("ollama pull \(tier.model)", forType: .string)
                         })
                 }
             }
@@ -880,10 +934,31 @@ struct AgentSettingsView: View {
     private func addCustomPath() {
         let raw = customPathDraft.trimmingCharacters(in: .whitespaces)
         guard !raw.isEmpty else { return }
-        let expanded = NSString(string: raw).expandingTildeInPath
-        guard !settings.agentAllowedPaths.contains(expanded) else { customPathDraft = ""; return }
-        settings.agentAllowedPaths.append(expanded)
+        let path = (NSString(string: raw).expandingTildeInPath as NSString).standardizingPath
+        guard !settings.agentAllowedPaths.contains(path) else { customPathDraft = ""; return }
+        settings.agentAllowedPaths.append(path)
         customPathDraft = ""
+    }
+
+    private func browseForPath() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Allow Writes"
+        panel.message = "Choose a folder the agent can write to without asking for approval each time."
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let path = url.resolvingSymlinksInPath().path
+        guard !settings.agentAllowedPaths.contains(path) else { return }
+        settings.agentAllowedPaths.append(path)
+    }
+
+    private func resetAllowedPaths() {
+        settings.agentAllowedPaths = [
+            NSHomeDirectory() + "/Desktop",
+            NSHomeDirectory() + "/Documents",
+            NSHomeDirectory() + "/Downloads"
+        ]
     }
 
     private func loadState() async {

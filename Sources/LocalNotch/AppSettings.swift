@@ -68,6 +68,12 @@ found, state that plainly and answer with what you know. Trust the query — do 
     @Published var agentShowReasoningTrace: Bool {
         didSet { UserDefaults.standard.set(agentShowReasoningTrace, forKey: "agentShowReasoningTrace") }
     }
+    // Auto-approve ("auto mode"): when ON, the agent performs destructive / bulk / outside-allowed-paths
+    // actions WITHOUT pausing to ask. Default OFF — this bypasses the safety prompts, so it's opt-in via
+    // Settings only (deliberately not surfaced in onboarding). Read-before-destroy still applies.
+    @Published var agentAutoApprove: Bool {
+        didSet { UserDefaults.standard.set(agentAutoApprove, forKey: "agentAutoApprove") }
+    }
     @Published var agentAllowedPaths: [String] {
         didSet {
             UserDefaults.standard.set(agentAllowedPaths, forKey: "agentAllowedPaths")
@@ -96,6 +102,7 @@ found, state that plainly and answer with what you know. Trust the query — do 
         agentModel = UserDefaults.standard.string(forKey: "agentModel") ?? ""
         agentVerifiedModel = UserDefaults.standard.string(forKey: "agentVerifiedModel") ?? ""
         agentShowReasoningTrace = UserDefaults.standard.bool(forKey: "agentShowReasoningTrace")
+        agentAutoApprove = UserDefaults.standard.bool(forKey: "agentAutoApprove")   // default OFF
         let savedPaths = UserDefaults.standard.stringArray(forKey: "agentAllowedPaths")
         agentAllowedPaths = savedPaths ?? [
             NSString(string: "~/Desktop").expandingTildeInPath,

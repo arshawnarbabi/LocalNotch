@@ -31,7 +31,7 @@ class ChatState: ObservableObject {
 
     private func makeSystemMessage() -> OllamaMessage {
         let preamble = """
-        CAPABILITY: This assistant has real-time web search via Brave Search API. \
+        CAPABILITY: This assistant has real-time web search. \
         When <web_search> blocks appear in the conversation, those are REAL results \
         retrieved from the internet moments ago — not simulated, not from training data. \
         If the user asks "did you search the web?" and a <web_search> block exists in \

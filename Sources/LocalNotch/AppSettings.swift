@@ -1,6 +1,20 @@
 import Foundation
 import AppKit
 
+enum SearchProvider: String, CaseIterable {
+    case brave = "brave"
+    case tavily = "tavily"
+    case auto = "auto"
+
+    var label: String {
+        switch self {
+        case .brave:  return "Brave"
+        case .tavily: return "Tavily"
+        case .auto:   return "Auto"
+        }
+    }
+}
+
 @MainActor
 final class AppSettings: ObservableObject {
     static let shared = AppSettings()
@@ -25,7 +39,7 @@ Never fabricate information.
 
 Never use emojis.
 
-This assistant has live web search integrated via Brave Search. When a <web_search> block appears \
+This assistant has live web search integrated. When a <web_search> block appears \
 in a message, those results are real data retrieved from the internet in real time — not simulated, \
 not from your training data. Treat them as authoritative current information and use them to \
 answer accurately.
@@ -45,6 +59,12 @@ found, state that plainly and answer with what you know. Trust the query — do 
     }
     @Published var braveSearchAPIKey: String {
         didSet { UserDefaults.standard.set(braveSearchAPIKey, forKey: "braveSearchAPIKey") }
+    }
+    @Published var tavilyAPIKey: String {
+        didSet { UserDefaults.standard.set(tavilyAPIKey, forKey: "tavilyAPIKey") }
+    }
+    @Published var searchProvider: SearchProvider {
+        didSet { UserDefaults.standard.set(searchProvider.rawValue, forKey: "searchProvider") }
     }
     @Published var displayName: String {
         didSet { UserDefaults.standard.set(displayName, forKey: "displayName") }
@@ -94,6 +114,9 @@ found, state that plainly and answer with what you know. Trust the query — do 
         textModelName    = UserDefaults.standard.string(forKey: "textModelName") ?? ""
         visionModelName  = UserDefaults.standard.string(forKey: "visionModelName") ?? ""
         braveSearchAPIKey = UserDefaults.standard.string(forKey: "braveSearchAPIKey") ?? ""
+        tavilyAPIKey     = UserDefaults.standard.string(forKey: "tavilyAPIKey") ?? ""
+        let providerRaw  = UserDefaults.standard.string(forKey: "searchProvider") ?? "brave"
+        searchProvider   = SearchProvider(rawValue: providerRaw) ?? .brave
         displayName      = UserDefaults.standard.string(forKey: "displayName") ?? ""
         systemPrompt     = UserDefaults.standard.string(forKey: "systemPrompt") ?? AppSettings.defaultSystemPrompt
         onboardingComplete = UserDefaults.standard.bool(forKey: "onboardingComplete")

@@ -836,7 +836,7 @@ struct ChatView: View {
                     state.isSearching = true
                     state.lastSearchQuery = query   // set immediately so badge shows during search
                 }
-                let searchContext = await BraveSearchService.shared.search(query)
+                let searchContext = await performWebSearch(query)
                 await MainActor.run { state.isSearching = false }
                 guard !Task.isCancelled else {
                     await MainActor.run { state.isLoading = false }
@@ -847,7 +847,7 @@ struct ChatView: View {
 
 <web_search>
 <query>\(query)</query>
-<source>Brave Search API — live internet retrieval</source>
+<source>Web search — live internet retrieval</source>
 <instruction>These are REAL results from the internet. Use them to answer. \
 If asked whether a web search was performed, say YES.</instruction>
 <results>
@@ -1076,11 +1076,29 @@ If asked whether a web search was performed, say YES.</instruction>
 
     /// Combined decision: returns a search query if any layer decides to search.
     private func decideSearchQuery(from text: String) async -> String? {
-        let hasKey = !AppSettings.shared.braveSearchAPIKey.trimmingCharacters(in: .whitespaces).isEmpty
-        guard hasKey else { return nil }
+        let hasBrave = !AppSettings.shared.braveSearchAPIKey.trimmingCharacters(in: .whitespaces).isEmpty
+        let hasTavily = !AppSettings.shared.tavilyAPIKey.trimmingCharacters(in: .whitespaces).isEmpty
+        guard hasBrave || hasTavily else { return nil }
         if let q = extractExplicitSearchQuery(from: text) { return q }
         if let q = detectCurrentInfoQuery(from: text) { return q }
         return await classifySearchNeed(from: text)
+    }
+
+    /// Dispatches search to the configured provider, with fallback in auto mode.
+    private func performWebSearch(_ query: String) async -> String? {
+        let provider = AppSettings.shared.searchProvider
+        switch provider {
+        case .brave:
+            return await BraveSearchService.shared.search(query)
+        case .tavily:
+            return await TavilySearchService.shared.search(query)
+        case .auto:
+            // Try Brave first, fall back to Tavily
+            if let result = await BraveSearchService.shared.search(query) {
+                return result
+            }
+            return await TavilySearchService.shared.search(query)
+        }
     }
 
     private func captureScreen() {
